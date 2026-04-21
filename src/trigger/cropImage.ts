@@ -6,7 +6,6 @@ const execAsync = promisify(exec);
 
 export const cropImageTask = task({
   id: "crop-image",
-  maxRetries: 3,
   run: async (payload: { imageUrl: string; x: number; y: number; w: number; h: number }) => {
     logger.info("Starting image crop task", { payload });
 

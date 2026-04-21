@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "prisma:generate": "prisma generate",
+    "dev": "npm run prisma:generate && next dev --webpack",
+    "build": "npm run prisma:generate && next build",
+    "start": "npm run prisma:generate && next start",
+    "lint": "eslint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.2.3",
@@ -22,6 +24,7 @@
     "react-markdown": "^10.1.0",
     "tailwind-merge": "^3.5.0",
     "trigger.dev": "^4.4.4",
+    "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

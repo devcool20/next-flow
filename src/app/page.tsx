@@ -1,11 +1,20 @@
-import Shell from "@/components/layout/Shell";
-import { WorkflowCanvasWithProvider } from "@/components/canvas/WorkflowCanvas";
+import Shell from '@/components/layout/Shell';
+import { WorkflowCanvasWithProviderHydrated } from '@/components/canvas/WorkflowCanvas';
+import { auth } from '@clerk/nextjs/server';
+import { ensureUserAndWorkflow, parseWorkflowJson } from '@/lib/workspace-server';
 
-export default function Home() {
+export default async function Home() {
+  const { userId } = await auth();
+  if (!userId) {
+    return null;
+  }
+  const { workflow } = await ensureUserAndWorkflow(userId);
+  const graph = parseWorkflowJson(workflow);
+
   return (
     <Shell>
-      <div className="absolute inset-0 w-full h-full bg-[#0A0A0A]">
-        <WorkflowCanvasWithProvider />
+      <div className="absolute inset-0 h-full w-full bg-[#0A0A0A]">
+        <WorkflowCanvasWithProviderHydrated workflowId={workflow.id} initialNodes={graph.nodes} initialEdges={graph.edges} />
       </div>
     </Shell>
   );

@@ -1,9 +1,11 @@
 import { Film, UploadCloud } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
 
-export function VideoUploadNode({ id, data }: { id: string, data: any }) {
+type NodeData = Record<string, unknown>;
+
+export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,14 +29,15 @@ export function VideoUploadNode({ id, data }: { id: string, data: any }) {
       id={id}
       title="Upload Video"
       icon={<Film size={16} />}
-      status={data.status || 'idle'}
+      status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
+      selected={selected || Boolean(data.highlighted)}
       outputs={[{ id: 'video_url', label: 'video' }]}
     >
       <div className="flex flex-col gap-3 h-full">
         {data.videoUrl ? (
           <div className="relative w-full h-32 rounded-md overflow-hidden bg-[#1A1A1A] border border-[#333] group">
             <video 
-              src={data.videoUrl} 
+              src={String(data.videoUrl)} 
               className="w-full h-full object-cover" 
               autoPlay 
               muted 
@@ -71,4 +74,4 @@ export function VideoUploadNode({ id, data }: { id: string, data: any }) {
       </div>
     </BaseNode>
   );
-}
+});

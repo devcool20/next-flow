@@ -1,0 +1,13 @@
+- [x] Phase 1: Foundation & Project Setup
+  - [x] Initialize Next.js project
+  - [x] Install core dependencies
+  - [x] Setting up Clerk Auth middleware
+  - [x] Setting up Prisma schema
+  - [x] Initialize Trigger.dev
+  - [x] Implement Shell, Left Sidebar, Right Sidebar UI
+- [x] Phase 2: Core Canvas & Node System
+- [x] Phase 3: Input Nodes & File Processing
+- [x] Phase 4: Execution Engine (Trigger.dev & FFmpeg)
+- [x] Phase 5: LLM Integration (Gemini)
+- [x] Phase 6: Workflow Features & History
+- [x] Phase 7: Polish & Sample Workflow

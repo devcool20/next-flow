@@ -1,18 +1,33 @@
 import { Crop } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
+import { memo } from 'react';
 
-export function CropNode({ id, data }: { id: string, data: any }) {
+type NodeData = Record<string, unknown>;
+
+export const CropNode = memo(function CropNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
+  const hasInputConnection = useWorkflowStore((state) => state.hasInputConnection);
+
+  const imageLinked = hasInputConnection(id, 'image_url');
+  const xLinked = hasInputConnection(id, 'x_percent');
+  const yLinked = hasInputConnection(id, 'y_percent');
+  const widthLinked = hasInputConnection(id, 'width_percent');
+  const heightLinked = hasInputConnection(id, 'height_percent');
 
   return (
     <BaseNode
       id={id}
       title="Crop Image"
       icon={<Crop size={16} />}
-      status={data.status || 'idle'}
+      status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
+      selected={selected || Boolean(data.highlighted)}
       inputs={[
-        { id: 'image_url', label: 'image_url' }
+        { id: 'image_url', label: 'image_url' },
+        { id: 'x_percent', label: 'x%' },
+        { id: 'y_percent', label: 'y%' },
+        { id: 'width_percent', label: 'w%' },
+        { id: 'height_percent', label: 'h%' },
       ]}
       outputs={[
         { id: 'output', label: 'cropped_url' }
@@ -27,9 +42,10 @@ export function CropNode({ id, data }: { id: string, data: any }) {
             <input 
               type="number" 
               className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
-              placeholder="0"
-              value={data.x_percent ?? ''}
+              placeholder={xLinked ? 'linked' : '0'}
+              value={(data.x_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { x_percent: e.target.value })}
+              disabled={xLinked}
             />
           </div>
           
@@ -38,9 +54,10 @@ export function CropNode({ id, data }: { id: string, data: any }) {
             <input 
               type="number" 
               className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
-              placeholder="0"
-              value={data.y_percent ?? ''}
+              placeholder={yLinked ? 'linked' : '0'}
+              value={(data.y_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { y_percent: e.target.value })}
+              disabled={yLinked}
             />
           </div>
           
@@ -49,9 +66,10 @@ export function CropNode({ id, data }: { id: string, data: any }) {
             <input 
               type="number" 
               className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
-              placeholder="100"
-              value={data.width_percent ?? ''}
+              placeholder={widthLinked ? 'linked' : '100'}
+              value={(data.width_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { width_percent: e.target.value })}
+              disabled={widthLinked}
             />
           </div>
           
@@ -60,13 +78,15 @@ export function CropNode({ id, data }: { id: string, data: any }) {
             <input 
               type="number" 
               className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
-              placeholder="100"
-              value={data.height_percent ?? ''}
+              placeholder={heightLinked ? 'linked' : '100'}
+              value={(data.height_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { height_percent: e.target.value })}
+              disabled={heightLinked}
             />
           </div>
         </div>
+        {imageLinked && <span className="text-[10px] text-gray-500">image_url linked from upstream</span>}
       </div>
     </BaseNode>
   );
-}
+});

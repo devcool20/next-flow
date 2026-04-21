@@ -2,18 +2,25 @@ import { Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
 import ReactMarkdown from 'react-markdown';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
-export function LLMNode({ id, data }: { id: string, data: any }) {
+type NodeData = Record<string, unknown>;
+
+export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
+  const hasInputConnection = useWorkflowStore((state) => state.hasInputConnection);
   const [expanded, setExpanded] = useState(true);
+  const systemLinked = hasInputConnection(id, 'system_prompt');
+  const userLinked = hasInputConnection(id, 'user_message');
+  const imagesLinked = hasInputConnection(id, 'images');
 
   return (
     <BaseNode
       id={id}
       title="Run Any LLM"
       icon={<Brain size={16} />}
-      status={data.status || 'idle'}
+      status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
+      selected={selected || Boolean(data.highlighted)}
       inputs={[
         { id: 'system_prompt', label: 'system' },
         { id: 'user_message', label: 'user' },
@@ -27,15 +34,36 @@ export function LLMNode({ id, data }: { id: string, data: any }) {
         {/* Model Selector */}
         <select
           className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-sm text-gray-300 focus:outline-none focus:border-[#555] transition-colors appearance-none"
-          value={data.model || 'gemini-1.5-flash'}
+          value={(data.model as string) || 'gemini-1.5-flash'}
           onChange={(e) => updateNodeData(id, { model: e.target.value })}
         >
           <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
           <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
         </select>
+        <textarea
+          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-xs text-gray-300 focus:outline-none focus:border-[#555] transition-colors min-h-[56px]"
+          placeholder={systemLinked ? 'system prompt linked' : 'System prompt (optional)'}
+          value={(data.systemPrompt as string) || ''}
+          onChange={(e) => updateNodeData(id, { systemPrompt: e.target.value })}
+          disabled={systemLinked}
+        />
+        <textarea
+          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-xs text-gray-300 focus:outline-none focus:border-[#555] transition-colors min-h-[72px]"
+          placeholder={userLinked ? 'user prompt linked' : 'User message'}
+          value={(data.userMessage as string) || ''}
+          onChange={(e) => updateNodeData(id, { userMessage: e.target.value })}
+          disabled={userLinked}
+        />
+        <input
+          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-xs text-gray-300 focus:outline-none focus:border-[#555] transition-colors"
+          placeholder={imagesLinked ? 'images linked from upstream' : 'Image URL(s), comma-separated (optional)'}
+          value={(data.imagesInput as string) || ''}
+          onChange={(e) => updateNodeData(id, { imagesInput: e.target.value })}
+          disabled={imagesLinked}
+        />
 
         {/* Output Area */}
-        {data.output && (
+        {Boolean(data.output) && (
           <div className="mt-2 border border-[#333] rounded-md overflow-hidden bg-[#151515]">
             <div 
               className="flex items-center justify-between p-2 bg-[#222] border-b border-[#333] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
@@ -47,7 +75,7 @@ export function LLMNode({ id, data }: { id: string, data: any }) {
             
             {expanded && (
               <div className="p-3 text-sm text-gray-300 max-h-[300px] overflow-y-auto prose prose-invert prose-sm">
-                <ReactMarkdown>{data.output}</ReactMarkdown>
+                <ReactMarkdown>{String(data.output)}</ReactMarkdown>
               </div>
             )}
           </div>
@@ -55,4 +83,4 @@ export function LLMNode({ id, data }: { id: string, data: any }) {
       </div>
     </BaseNode>
   );
-}
+});

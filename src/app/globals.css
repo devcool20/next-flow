@@ -1,36 +1,121 @@
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css";
 
+@font-face {
+  font-family: 'Suisse Intl';
+  src: url('/fonts/SuisseIntl-Regular-WebM.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Suisse Intl';
+  src: url('/fonts/SuisseIntl-Medium-WebM.woff2') format('woff2');
+  font-weight: 500;
+}
+@font-face {
+  font-family: 'Suisse Intl';
+  src: url('/fonts/SuisseIntl-SemiBold-WebM.woff2') format('woff2');
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Suisse Intl';
+  src: url('/fonts/SuisseIntl-Bold-WebM.woff2') format('woff2');
+  font-weight: 700;
+}
+
 :root {
+  --background: #fbfbfb;
+  --foreground: #0f172a;
+  --dot-color: #e5e5e5;
+  --edge-color: #d4d4d4;
+}
+
+[data-theme="dark"] {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --dot-color: #2b2b2b;
+  --edge-color: rgba(255, 199, 0, 0.4);
 }
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --animate-pulse-glow: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --font-suisse: 'Suisse Intl', sans-serif;
 }
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 0 rgba(77, 159, 255, 0);
   }
   50% {
-    box-shadow: 0 0 15px 2px rgba(16, 185, 129, 0.5);
+    box-shadow: 0 0 26px 3px rgba(77, 159, 255, 0.66);
   }
 }
 
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-suisse, Inter, sans-serif);
+}
+
+.dot-grid {
+  background-size: 20px 20px;
+  background-image: radial-gradient(circle, #1f1f1f 1px, transparent 1px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3a3a3a 0%, #2b2b2b 100%);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #4a4a4a 0%, #323232 100%);
+}
+
+.node-shadow {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.react-flow__edge-path {
+  stroke: var(--edge-color);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.react-flow__edge.selected path {
+  stroke: #ffd60a;
+}
+
+.nextflow-controls {
+  margin-bottom: 72px;
+}
+
+.nextflow-controls button {
+  background: #171717 !important;
+  border: 1px solid #2a2a2a !important;
+  color: #bdbdbd !important;
+  box-shadow: 0 8px 22px -14px rgba(0, 0, 0, 0.95);
+}
+
+.nextflow-controls button:hover {
+  color: #ffffff !important;
+  border-color: #3a3a3a !important;
+  background: #1e1e1e !important;
 }

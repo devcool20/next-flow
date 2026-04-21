@@ -1,9 +1,9 @@
 import { logger, task } from "@trigger.dev/sdk/v3";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { Part } from "@google/generative-ai";
 
 export const runLLMTask = task({
   id: "run-llm",
-  maxRetries: 2,
   run: async (payload: { 
     model: string; 
     systemPrompt?: string; 
@@ -34,7 +34,7 @@ export const runLLMTask = task({
       });
 
       // Prepare multimodal content parts
-      const promptParts: any[] = [payload.userMessage];
+      const promptParts: (string | Part)[] = [payload.userMessage];
 
       // If there are images, we need to fetch them and parse them to base64 for Gemini
       if (payload.images && payload.images.length > 0) {
@@ -71,8 +71,9 @@ export const runLLMTask = task({
         response: responseText
       };
 
-    } catch (e: any) {
-        logger.error("LLM Task Failed", { error: e.message });
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Unknown LLM task error";
+        logger.error("LLM Task Failed", { error: message });
         throw e;
     }
   },

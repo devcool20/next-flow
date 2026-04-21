@@ -25,58 +25,67 @@ export function BaseNode({
 }: BaseNodeProps) {
   return (
     <div
+      data-node-id={id}
       className={clsx(
-        "relative w-72 rounded-xl bg-[#111] border text-white shadow-2xl transition-all duration-200",
-        selected ? "border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.3)]" : "border-[#333] hover:border-[#444]",
-        status === 'running' && "animate-pulse-glow border-emerald-500/50",
+        "rounded-xl border border-neutral-200 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-suisse dark:border-white/10 dark:bg-[#161616] dark:shadow-none transition-all duration-300 relative w-[246px]",
+        selected
+          ? "border-neutral-400 dark:border-[#FFC700] dark:shadow-[0_0_0_1px_rgba(255,199,0,1),0_0_22px_-8px_rgba(255,199,0,0.4)]"
+          : "hover:border-neutral-300 dark:hover:border-white/20",
+        status === 'running' && "animate-pulse-glow border-[#FFC700]/50",
         status === 'error' && "border-red-500"
       )}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2 p-3 border-b border-[#222]">
-        <div className="text-gray-400">{icon}</div>
-        <div className="font-medium text-sm text-gray-200">{title}</div>
+      {/* Node Header (Floating Outside) */}
+      <div className="absolute -top-7 left-1 flex items-center gap-2">
+        <div className="text-[#FFC700] flex h-4 w-4 items-center justify-center">{icon}</div>
+        <div className="text-[12px] font-medium text-neutral-600 dark:text-neutral-400">{title}</div>
         {status === 'running' && (
           <div className="ml-auto flex items-center justify-center">
             <span className="flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-blue-400 opacity-80"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
             </span>
           </div>
         )}
       </div>
 
       {/* Main Content Area */}
-      <div className="p-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         {children}
       </div>
 
       {/* Input Handles (Left) */}
       {inputs.map((input, i) => (
-        <div key={input.id} className="absolute left-0 top-[60%] -translate-x-1/2 flex items-center" style={{ top: `${(i + 1) * 30 + 40}px` }}>
+        <div
+          key={input.id}
+          className="absolute left-0 -translate-x-1/2 flex items-center"
+          style={{ top: `${inputs.length === 1 ? 54 : i * 29 + 52}px` }}
+        >
           <Handle
             type="target"
             position={Position.Left}
             id={input.id}
-            className="w-3 h-3 bg-[#444] border-2 border-[#111] rounded-full hover:bg-white hover:scale-125 transition-all"
+            title={input.label ?? input.id}
+            aria-label={input.label ?? input.id}
+            className="z-10 !h-3 !w-3 !rounded-full !border-[1.5px] border-white !bg-[#FFC700] transition-transform hover:scale-125 dark:border-[#161616]"
           />
-          {input.label && (
-            <span className="absolute left-4 text-[10px] text-gray-500 bg-[#111] px-1 whitespace-nowrap">{input.label}</span>
-          )}
         </div>
       ))}
 
       {/* Output Handles (Right) */}
       {outputs.map((output, i) => (
-        <div key={output.id} className="absolute right-0 top-[50%] translate-x-1/2 flex items-center" style={{ top: `${(i + 1) * 30 + 40}px` }}>
-          {output.label && (
-            <span className="absolute right-4 text-[10px] text-gray-500 bg-[#111] px-1 whitespace-nowrap">{output.label}</span>
-          )}
+        <div
+          key={output.id}
+          className="absolute right-0 translate-x-1/2 flex items-center"
+          style={{ top: `${outputs.length === 1 ? 54 : i * 29 + 52}px` }}
+        >
           <Handle
             type="source"
             position={Position.Right}
             id={output.id}
-            className="w-3 h-3 bg-white border-2 border-[#111] rounded-full hover:bg-white hover:scale-125 transition-all"
+            title={output.label ?? output.id}
+            aria-label={output.label ?? output.id}
+            className="z-10 !h-3 !w-3 !rounded-full !border-[1.5px] border-white !bg-[#FFC700] transition-transform hover:scale-125 dark:border-[#161616]"
           />
         </div>
       ))}

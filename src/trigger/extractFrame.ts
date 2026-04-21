@@ -6,7 +6,6 @@ const execAsync = promisify(exec);
 
 export const extractFrameTask = task({
   id: "extract-frame",
-  maxRetries: 3,
   run: async (payload: { videoUrl: string; timestamp: string }) => {
     logger.info("Starting frame extraction task", { payload });
 
