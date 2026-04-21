@@ -30,7 +30,7 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
         
         <input 
           type="text" 
-          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-sm text-gray-300 focus:outline-none focus:border-[#555] transition-colors" 
+          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-sm text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]" 
           placeholder={timestampLinked ? 'linked from input' : 'e.g. 5s or 50%'}
           value={(data.timestamp as string) ?? ''}
           onChange={(e) => updateNodeData(id, { timestamp: e.target.value })}

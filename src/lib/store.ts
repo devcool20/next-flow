@@ -33,12 +33,14 @@ export type InteractionMode = 'select' | 'pan' | 'cut';
 type WorkflowState = {
   nodes: Node[];
   edges: Edge[];
+  clipboard: Node[];
   graphPast: { nodes: Node[]; edges: Edge[] }[];
   graphFuture: { nodes: Node[]; edges: Edge[] }[];
   isRunning: boolean;
   cutMode: boolean;
   interactionMode: InteractionMode;
   isHydrated: boolean;
+  editingTextNodeId: string | null;
   workflowId: string | null;
   history: WorkflowRun[];
   activeRunId: string | null;
@@ -61,9 +63,13 @@ type WorkflowState = {
   persistWorkflow: () => Promise<void>;
   hasInputConnection: (nodeId: string, handleId: string) => boolean;
   deleteSelectedNodes: () => void;
+  duplicateSelectedNodes: () => void;
+  copySelectedNodes: () => void;
+  disableSelectedNodes: () => void;
   toggleCutMode: () => void;
   setInteractionMode: (mode: InteractionMode) => void;
   removeEdgeById: (edgeId: string) => void;
+  setEditingTextNodeId: (nodeId: string | null) => void;
 };
 
 const MAX_GRAPH_HISTORY = 100;
@@ -233,7 +239,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   isRunning: false,
   cutMode: false,
   interactionMode: 'select',
+  clipboard: [],
   isHydrated: false,
+  editingTextNodeId: null,
   workflowId: null,
   history: [],
   activeRunId: null,
@@ -577,6 +585,51 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     });
     void get().persistWorkflow();
   },
+  duplicateSelectedNodes: () => {
+    const state = get();
+    const selectedNodes = state.nodes.filter((node) => node.selected);
+    if (selectedNodes.length === 0) return;
+    const newNodes = selectedNodes.map((node) => ({
+      ...node,
+      id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      selected: true,
+      position: { x: node.position.x + 50, y: node.position.y + 50 },
+    }));
+    const nextNodes = [...state.nodes.map(n => ({...n, selected: false})), ...newNodes];
+    set({
+      nodes: nextNodes,
+      graphPast: nextPastStack(state.graphPast, state.nodes, state.edges),
+      graphFuture: [],
+    });
+    void get().persistWorkflow();
+  },
+  copySelectedNodes: () => {
+    const state = get();
+    const selectedNodes = state.nodes.filter((node) => node.selected);
+    set({ clipboard: selectedNodes });
+  },
+  disableSelectedNodes: () => {
+    const state = get();
+    let changed = false;
+    const nextNodes = state.nodes.map((node) => {
+      if (node.selected) {
+        changed = true;
+        return {
+          ...node,
+          data: { ...node.data, disabled: !node.data.disabled }
+        };
+      }
+      return node;
+    });
+    if (changed) {
+      set({
+        nodes: nextNodes,
+        graphPast: nextPastStack(state.graphPast, state.nodes, state.edges),
+        graphFuture: [],
+      });
+      void get().persistWorkflow();
+    }
+  },
   toggleCutMode: () => {
     const nextCutMode = !get().cutMode;
     set({ cutMode: nextCutMode, interactionMode: nextCutMode ? 'cut' : 'select' });
@@ -594,5 +647,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       graphFuture: [],
     });
     void get().persistWorkflow();
+  },
+  setEditingTextNodeId: (nodeId: string | null) => {
+    set({ editingTextNodeId: nodeId });
   },
 }));

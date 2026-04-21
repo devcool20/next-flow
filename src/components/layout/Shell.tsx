@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
+import { Tooltip } from '../shared/Tooltip';
 import { useWorkflowStore } from '@/lib/store';
 import {
   ChevronDown,
@@ -125,6 +126,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
               active
               theme={theme}
+              tooltip="Toggle Theme"
+              tooltipSide="bottom"
             />
             <TextGhostButton icon={<Share2 size={14} />} text="Share" theme={theme} />
             <TextGhostButton icon={<Sparkles size={14} />} text="Turn workflow into app" theme={theme} />
@@ -135,23 +138,27 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   theme === 'dark' ? 'border-white/5 bg-[#1a1a1a]/90' : 'border-[#d8dfeb] bg-white/95'
                 }`}
               >
-                <button
-                  onClick={handleMainIconClick}
-                  className={`flex h-full items-center justify-center rounded-l-xl px-3 hover:text-white ${
-                    theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5' : 'text-[#5f6f88] hover:bg-[#f1f4f9]'
-                  } ${rightOpen ? (theme === 'dark' ? 'text-white' : 'text-[#0f172a]') : ''}`}
-                >
-                  {rightPanelMode === 'assets' ? <ImageIcon size={14} /> : <History size={14} />}
-                </button>
+                <Tooltip content={rightPanelMode === 'assets' ? 'Assets' : 'History'} side="bottom">
+                  <button
+                    onClick={handleMainIconClick}
+                    className={`flex h-full items-center justify-center rounded-l-xl px-3 hover:text-white ${
+                      theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5' : 'text-[#5f6f88] hover:bg-[#f1f4f9]'
+                    } ${rightOpen ? (theme === 'dark' ? 'text-white' : 'text-[#0f172a]') : ''}`}
+                  >
+                    {rightPanelMode === 'assets' ? <ImageIcon size={14} /> : <History size={14} />}
+                  </button>
+                </Tooltip>
                 <div className={`h-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
-                <button
-                  onClick={() => setRightMenuOpen((prev) => !prev)}
-                  className={`flex h-full items-center justify-center rounded-r-xl px-2 hover:text-white ${
-                    theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5' : 'text-[#5f6f88] hover:bg-[#f1f4f9]'
-                  } ${rightMenuOpen ? (theme === 'dark' ? 'text-white' : 'text-[#0f172a]') : ''}`}
-                >
-                  <ChevronDown size={14} className={`transition-transform ${rightMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
+                <Tooltip content="Options" side="bottom">
+                  <button
+                    onClick={() => setRightMenuOpen((prev) => !prev)}
+                    className={`flex h-full items-center justify-center rounded-r-xl px-2 hover:text-white ${
+                      theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5' : 'text-[#5f6f88] hover:bg-[#f1f4f9]'
+                    } ${rightMenuOpen ? (theme === 'dark' ? 'text-white' : 'text-[#0f172a]') : ''}`}
+                  >
+                    <ChevronDown size={14} className={`transition-transform ${rightMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </Tooltip>
               </div>
 
               {rightMenuOpen && (
@@ -183,13 +190,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {children}
 
         <div className="absolute bottom-6 left-6 z-30 flex items-center gap-2">
-          <IconGhostButton icon={<RotateCcw size={14} />} onClick={undoGraph} theme={theme} />
-          <IconGhostButton icon={<RotateCw size={14} />} onClick={redoGraph} theme={theme} />
+          <IconGhostButton icon={<RotateCcw size={14} />} onClick={undoGraph} theme={theme} tooltip="Undo" tooltipShortcut="⌘" tooltipShortcutLabel="Z" />
+          <IconGhostButton icon={<RotateCw size={14} />} onClick={redoGraph} theme={theme} tooltip="Redo" tooltipShortcut="⌘" tooltipShortcutLabel="Y" />
           <TextGhostButton icon={<Keyboard size={14} />} text="Keyboard shortcuts" theme={theme} />
         </div>
 
         <div
-          className={`absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center rounded-2xl border p-1.5 transition-all ${
+          className={`absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-[1.25rem] border p-2 transition-all ${
             theme === 'dark' ? 'border-white/10 bg-[#1a1a1a]/95 shadow-2xl' : 'border-neutral-200/50 bg-white/80 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.04)]'
           }`}
         >
@@ -197,12 +204,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             icon={<Plus size={16} />}
             onClick={() => window.dispatchEvent(new CustomEvent('nextflow:add-node', { detail: { type: 'text' } }))}
             theme={theme}
+            tooltip="Add Node"
           />
-          <DockButton icon={<MousePointer2 size={16} />} active={interactionMode === 'select'} onClick={() => setInteractionMode('select')} theme={theme} />
-          <DockButton icon={<Hand size={16} />} active={interactionMode === 'pan'} onClick={() => setInteractionMode('pan')} theme={theme} />
-          <DockButton icon={<Scissors size={16} />} onClick={() => setInteractionMode('cut')} active={interactionMode === 'cut'} theme={theme} />
-          <DockButton icon={<Sparkles size={16} />} onClick={() => void runSelectedWorkflow()} theme={theme} />
-          <DockButton icon={<GitFork size={16} />} onClick={() => void runWorkflow()} theme={theme} />
+          <DockButton icon={<MousePointer2 size={16} />} active={interactionMode === 'select'} onClick={() => setInteractionMode('select')} theme={theme} tooltip="Draw Selection" tooltipShortcut="⌘" tooltipShortcutLabel="Drag" />
+          <DockButton icon={<Hand size={16} />} active={interactionMode === 'pan'} onClick={() => setInteractionMode('pan')} theme={theme} tooltip="Pan Canvas" tooltipShortcut="Space" tooltipShortcutLabel="Drag" />
+          <DockButton icon={<Scissors size={16} />} onClick={() => setInteractionMode('cut')} active={interactionMode === 'cut'} theme={theme} tooltip="Disconnect" tooltipShortcut="⇧" tooltipShortcutLabel="Drag" />
+          <DockButton icon={<Sparkles size={16} />} onClick={() => void runSelectedWorkflow()} theme={theme} tooltip="Run Selection" tooltipShortcut="⌘" tooltipShortcutLabel="↵" />
+          <DockButton icon={<GitFork size={16} />} onClick={() => void runWorkflow()} theme={theme} tooltip="Run All Nodes" tooltipShortcut="⇧" tooltipShortcutLabel="↵" />
         </div>
 
 
@@ -220,6 +228,10 @@ function IconGhostButton({
   rounded = 'rounded-xl',
   size = 'h-9 w-9',
   theme = 'dark',
+  tooltip,
+  tooltipSide = 'top',
+  tooltipShortcut,
+  tooltipShortcutLabel,
 }: {
   icon: ReactNode;
   onClick?: () => void;
@@ -227,11 +239,15 @@ function IconGhostButton({
   rounded?: string;
   size?: string;
   theme?: ThemeMode;
+  tooltip?: string;
+  tooltipSide?: 'top' | 'bottom' | 'left' | 'right';
+  tooltipShortcut?: string;
+  tooltipShortcutLabel?: string;
 }) {
   const darkClass = active ? 'border-white/20 text-white' : 'border-white/5 text-[#8e8e8e] hover:text-white';
   const lightClass = active ? 'border-[#cfd7e4] bg-white text-[#0f172a]' : 'border-[#d8dfeb] bg-white/95 text-[#5f6f88] hover:text-[#0f172a]';
 
-  return (
+  const btn = (
     <button
       onClick={onClick}
       className={`${size} ${rounded} flex items-center justify-center border transition-colors ${
@@ -241,6 +257,11 @@ function IconGhostButton({
       {icon}
     </button>
   );
+
+  if (tooltip) {
+    return <Tooltip content={tooltip} side={tooltipSide} shortcut={tooltipShortcut} shortcutLabel={tooltipShortcutLabel} className="h-full">{btn}</Tooltip>;
+  }
+  return btn;
 }
 
 function TextGhostButton({ icon, text, theme = 'dark' }: { icon: ReactNode; text: string; theme?: ThemeMode }) {
@@ -263,16 +284,24 @@ function DockButton({
   active,
   onClick,
   theme = 'dark',
+  tooltip,
+  tooltipSide = 'top',
+  tooltipShortcut,
+  tooltipShortcutLabel,
 }: {
   icon: ReactNode;
   active?: boolean;
   onClick?: () => void;
   theme?: ThemeMode;
+  tooltip?: string;
+  tooltipSide?: 'top' | 'bottom' | 'left' | 'right';
+  tooltipShortcut?: string;
+  tooltipShortcutLabel?: string;
 }) {
-  return (
+  const btn = (
     <button
       onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+      className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
         theme === 'dark'
           ? active
             ? 'bg-white/10 text-white'
@@ -285,6 +314,12 @@ function DockButton({
       {icon}
     </button>
   );
+
+  if (tooltip) {
+    return <Tooltip content={tooltip} side={tooltipSide} shortcut={tooltipShortcut} shortcutLabel={tooltipShortcutLabel} className="h-full">{btn}</Tooltip>;
+  }
+
+  return btn;
 }
 
 function MenuItem({
@@ -319,7 +354,17 @@ function MenuItem({
 function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
   const [workspaceName, setWorkspaceName] = useState('Untitled');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const savedName = window.localStorage.getItem('nextflow-workspace-name');
+    if (savedName) setWorkspaceName(savedName);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('nextflow-workspace-name', workspaceName);
+  }, [workspaceName]);
   
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -364,14 +409,18 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
           <ChevronDown size={14} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
         </button>
         <div className={`h-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
-        <input
-          type="text"
-          value={workspaceName}
-          onChange={(e) => setWorkspaceName(e.target.value)}
-          className={`h-full w-28 rounded-r-xl bg-transparent px-2.5 text-sm font-semibold focus:outline-none focus:ring-0 ${
-            theme === 'dark' ? 'text-white' : 'text-[#0f172a]'
-          }`}
-        />
+        <div className={`relative flex items-center overflow-hidden transition-all duration-300 ease-out ${isFocused ? 'w-48' : 'w-28'}`}>
+          <input
+            type="text"
+            value={workspaceName}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onChange={(e) => setWorkspaceName(e.target.value)}
+            className={`h-full w-full bg-transparent px-2.5 text-sm font-semibold focus:outline-none focus:ring-0 ${
+              theme === 'dark' ? 'text-white' : 'text-[#0f172a]'
+            }`}
+          />
+        </div>
       </div>
 
       {menuOpen && (

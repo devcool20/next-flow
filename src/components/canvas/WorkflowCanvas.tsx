@@ -19,6 +19,7 @@ import { VideoUploadNode } from '../nodes/VideoUploadNode';
 import { CropNode } from '../nodes/CropNode';
 import { ExtractFrameNode } from '../nodes/ExtractFrameNode';
 import { LLMNode } from '../nodes/LLMNode';
+import { Pencil, Copy, CopyPlus, Edit2, EyeOff, Trash } from 'lucide-react';
 
 const nodeTypes = {
   text: TextNode,
@@ -56,8 +57,24 @@ function WorkflowCanvasBody({
     interactionMode,
     removeEdgeById,
     toggleCutMode,
+    duplicateSelectedNodes,
+    deleteSelectedNodes,
+    copySelectedNodes,
+    disableSelectedNodes,
+    updateNodeData,
+    editingTextNodeId,
+    setEditingTextNodeId,
   } = useWorkflowStore();
+  const activeTextNode = nodes.find(n => n.id === editingTextNodeId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  const [contextMenu, setContextMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    const handleGlobalClick = () => setContextMenu(null);
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
   const { screenToFlowPosition } = useReactFlow();
 
   // Cut-line drag state
@@ -251,6 +268,15 @@ function WorkflowCanvasBody({
         nodesDraggable={nodesDraggable}
         elementsSelectable={elementsSelectable}
         selectionOnDrag={elementsSelectable}
+        onNodeContextMenu={(event, node) => {
+          event.preventDefault();
+          setContextMenu({
+            id: node.id,
+            top: event.clientY,
+            left: event.clientX,
+          });
+        }}
+        onPaneClick={() => setContextMenu(null)}
         onEdgeClick={(_, edge) => {
           if (!cutMode) return;
           removeEdgeById(edge.id);
@@ -271,13 +297,128 @@ function WorkflowCanvasBody({
         className="bg-[var(--background)]"
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--dot-color)" />
-        <Controls className="nextflow-controls fill-white" position="bottom-left" />
+        <Controls 
+          className="nextflow-controls !bg-[#1a1a1a]/95 backdrop-blur-md !border !border-white/10 !text-[#8e8e8e] !rounded-xl overflow-hidden shadow-2xl [&>button]:!border-white/5 [&>button]:hover:!bg-white/10 [&>button]:hover:!text-white [&>button]:transition-colors" 
+          position="bottom-right" 
+          showInteractive={false} 
+        />
         <MiniMap
-          className="bg-[#111] border-2 border-[#222] rounded-lg overflow-hidden"
+          className="bg-[#111] border border-[#222] rounded-lg overflow-hidden !bottom-16"
           nodeColor="#333"
           maskColor="rgba(0, 0, 0, 0.55)"
         />
       </ReactFlow>
+
+      {contextMenu && (
+        <div
+          className="fixed z-[100] w-56 rounded-xl border border-neutral-200 bg-white p-1 shadow-2xl dark:border-[#2a2a2a] dark:bg-[#161616]"
+          style={{ top: contextMenu.top, left: contextMenu.left }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col text-[13px] font-medium text-neutral-700 dark:text-neutral-300">
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-white/5" onClick={() => {
+              window.dispatchEvent(new CustomEvent('nextflow:open-editor', { detail: { id: contextMenu.id } }));
+              setContextMenu(null);
+            }}>
+              <span className="flex items-center gap-2"><Pencil size={15} /> Open Text Editor</span>
+            </button>
+            <div className="my-[2px] h-[1px] bg-neutral-100 dark:bg-white/5" />
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-white/5" onClick={() => {
+              copySelectedNodes();
+              setContextMenu(null);
+            }}>
+              <span className="flex items-center gap-2"><Copy size={15} /> Copy</span>
+              <div className="flex items-center gap-1 text-[10px] tracking-wider text-neutral-400 dark:text-neutral-500">
+                <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 pb-[1px] dark:border-[#333] dark:bg-[#1f1f1f]">⌘</kbd>
+                <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 pb-[1px] dark:border-[#333] dark:bg-[#1f1f1f]">C</kbd>
+              </div>
+            </button>
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-white/5" onClick={() => { 
+                duplicateSelectedNodes();
+                setContextMenu(null); 
+              }}>
+              <span className="flex items-center gap-2"><CopyPlus size={15} /> Duplicate</span>
+              <div className="flex items-center gap-1 text-[10px] tracking-wider text-neutral-400 dark:text-neutral-500">
+                <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 pb-[1px] dark:border-[#333] dark:bg-[#1f1f1f]">⌘</kbd>
+                <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 pb-[1px] dark:border-[#333] dark:bg-[#1f1f1f]">D</kbd>
+              </div>
+            </button>
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-white/5" onClick={() => {
+              const newTitle = window.prompt('Enter new node name:');
+              if (newTitle) updateNodeData(contextMenu.id, { title: newTitle });
+              setContextMenu(null);
+            }}>
+              <span className="flex items-center gap-2"><Edit2 size={15} /> Rename</span>
+              <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 pb-[1px] text-[10px] text-neutral-400 dark:border-[#333] dark:bg-[#1f1f1f] dark:text-neutral-500">R</kbd>
+            </button>
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-white/5" onClick={() => {
+              disableSelectedNodes();
+              setContextMenu(null);
+            }}>
+              <span className="flex items-center gap-2"><EyeOff size={15} /> Disable Node</span>
+            </button>
+            <div className="my-[2px] h-[1px] bg-neutral-100 dark:bg-white/5" />
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-red-500 hover:bg-red-50 dark:text-[#ff4a4a] dark:hover:bg-red-500/10" onClick={() => { 
+                deleteSelectedNodes();
+                setContextMenu(null); 
+              }}>
+              <span className="flex items-center gap-2"><Trash size={15} /> Delete</span>
+              <kbd className="rounded border border-red-200 bg-red-50 px-1 pb-[1px] text-[10px] text-red-400 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-500/50">⌫</kbd>
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Global Markdown Editor Overlay outside of ReactFlow Transform Viewport */}
+      {editingTextNodeId && activeTextNode && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col bg-[#0A0A0A] m-0 p-0"
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex h-16 w-full items-center justify-between px-6 border-b border-white/5 bg-[#0A0A0A]">
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center text-[15px]">
+                <span className="text-white font-semibold">Text</span>
+                <span className="mx-2 text-white/50 text-xs font-mono">{'>'}</span>
+                <span className="text-white font-semibold">Input Text</span>
+              </div>
+              <span className="text-xs text-white/40 font-medium">Edit your content using Markdown formatting, saves automatically</span>
+            </div>
+            
+            <button
+              className="flex items-center gap-3 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black hover:bg-neutral-200 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingTextNodeId(null);
+              }}
+            >
+              Done
+              <div className="flex items-center gap-1 text-[11px] text-neutral-500 font-medium font-sans">
+                <span>Ctrl+</span>
+                <span className="font-serif">↵</span>
+                <span>/ Esc</span>
+              </div>
+            </button>
+          </div>
+
+          {/* Editor Core */}
+          <div className="flex flex-1 items-center justify-center bg-[#0A0A0A] overflow-hidden p-8">
+            <textarea
+              className="max-w-4xl h-full w-full resize-none bg-transparent p-0 text-base text-white/90 font-light placeholder:text-white/20 focus:outline-none nodrag nowheel pt-8"
+              value={(activeTextNode.data?.value as string) || ''}
+              onChange={(e) => updateNodeData(editingTextNodeId, { value: e.target.value })}
+              placeholder="Please enter..."
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' || (e.ctrlKey && e.key === 'Enter')) {
+                  setEditingTextNodeId(null);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

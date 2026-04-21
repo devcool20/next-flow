@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react';
 import { clsx } from 'clsx';
 import { ReactNode } from 'react';
+import { useWorkflowStore } from '@/lib/store';
 
 interface BaseNodeProps {
   id: string;
@@ -23,13 +24,19 @@ export function BaseNode({
   outputs = [],
   selected = false,
 }: BaseNodeProps) {
+  const duplicateSelectedNodes = useWorkflowStore((state) => state.duplicateSelectedNodes);
+  const deleteSelectedNodes = useWorkflowStore((state) => state.deleteSelectedNodes);
+  const nodeData = useWorkflowStore((state) => state.nodes.find((n) => n.id === id)?.data);
+  const displayTitle = (nodeData?.title as string) || title;
+
   return (
-    <div
+    <>
+      <div
       data-node-id={id}
       className={clsx(
         "rounded-xl border border-neutral-200 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-suisse dark:border-white/10 dark:bg-[#161616] dark:shadow-none transition-all duration-300 relative w-[246px]",
         selected
-          ? "border-neutral-400 dark:border-[#FFC700] dark:shadow-[0_0_0_1px_rgba(255,199,0,1),0_0_22px_-8px_rgba(255,199,0,0.4)]"
+          ? "border-[#eab308] ring-1 ring-[#eab308] shadow-[0_0_0_1px_rgba(234,179,8,1),0_0_22px_-8px_rgba(234,179,8,0.4)] dark:border-[#FFC700] dark:ring-[#FFC700] dark:shadow-[0_0_0_1px_rgba(255,199,0,1),0_0_22px_-8px_rgba(255,199,0,0.4)]"
           : "hover:border-neutral-300 dark:hover:border-white/20",
         status === 'running' && "animate-pulse-glow border-[#FFC700]/50",
         status === 'error' && "border-red-500"
@@ -38,7 +45,7 @@ export function BaseNode({
       {/* Node Header (Floating Outside) */}
       <div className="absolute -top-7 left-1 flex items-center gap-2">
         <div className="text-[#FFC700] flex h-4 w-4 items-center justify-center">{icon}</div>
-        <div className="text-[12px] font-medium text-neutral-600 dark:text-neutral-400">{title}</div>
+        <div className="text-[12px] font-medium text-neutral-600 dark:text-neutral-400">{displayTitle}</div>
         {status === 'running' && (
           <div className="ml-auto flex items-center justify-center">
             <span className="flex h-2 w-2">
@@ -90,5 +97,6 @@ export function BaseNode({
         </div>
       ))}
     </div>
+    </>
   );
 }

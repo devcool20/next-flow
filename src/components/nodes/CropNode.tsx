@@ -37,11 +37,11 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
         <label className="text-xs text-gray-400 font-medium">Crop Parameters (%)</label>
         
         <div className="grid grid-cols-2 gap-2">
-          <div className="flex bg-[#1A1A1A] border border-[#333] rounded-md overflow-hidden focus-within:border-[#555] transition-colors">
-            <span className="bg-[#222] text-gray-500 text-[10px] px-2 flex items-center justify-center border-r border-[#333]">X</span>
+          <div className="flex bg-neutral-100 border border-neutral-200 rounded-md overflow-hidden focus-within:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:focus-within:border-[#555]">
+            <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center border-r border-neutral-300 dark:bg-[#222] dark:text-gray-500 dark:border-[#333]">X</span>
             <input 
               type="number" 
-              className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
+              className="w-full bg-transparent text-neutral-800 p-1.5 text-xs focus:outline-none dark:text-gray-300" 
               placeholder={xLinked ? 'linked' : '0'}
               value={(data.x_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { x_percent: e.target.value })}
@@ -49,11 +49,11 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             />
           </div>
           
-          <div className="flex bg-[#1A1A1A] border border-[#333] rounded-md overflow-hidden focus-within:border-[#555] transition-colors">
-            <span className="bg-[#222] text-gray-500 text-[10px] px-2 flex items-center justify-center border-r border-[#333]">Y</span>
+          <div className="flex bg-neutral-100 border border-neutral-200 rounded-md overflow-hidden focus-within:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:focus-within:border-[#555]">
+            <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center border-r border-neutral-300 dark:bg-[#222] dark:text-gray-500 dark:border-[#333]">Y</span>
             <input 
               type="number" 
-              className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
+              className="w-full bg-transparent text-neutral-800 p-1.5 text-xs focus:outline-none dark:text-gray-300" 
               placeholder={yLinked ? 'linked' : '0'}
               value={(data.y_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { y_percent: e.target.value })}
@@ -61,11 +61,11 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             />
           </div>
           
-          <div className="flex bg-[#1A1A1A] border border-[#333] rounded-md overflow-hidden focus-within:border-[#555] transition-colors">
-            <span className="bg-[#222] text-gray-500 text-[10px] px-2 flex items-center justify-center border-r border-[#333]">W</span>
+          <div className="flex bg-neutral-100 border border-neutral-200 rounded-md overflow-hidden focus-within:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:focus-within:border-[#555]">
+            <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center border-r border-neutral-300 dark:bg-[#222] dark:text-gray-500 dark:border-[#333]">W</span>
             <input 
               type="number" 
-              className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
+              className="w-full bg-transparent text-neutral-800 p-1.5 text-xs focus:outline-none dark:text-gray-300" 
               placeholder={widthLinked ? 'linked' : '100'}
               value={(data.width_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { width_percent: e.target.value })}
@@ -73,11 +73,11 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             />
           </div>
           
-          <div className="flex bg-[#1A1A1A] border border-[#333] rounded-md overflow-hidden focus-within:border-[#555] transition-colors">
-            <span className="bg-[#222] text-gray-500 text-[10px] px-2 flex items-center justify-center border-r border-[#333]">H</span>
+          <div className="flex bg-neutral-100 border border-neutral-200 rounded-md overflow-hidden focus-within:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:focus-within:border-[#555]">
+            <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center border-r border-neutral-300 dark:bg-[#222] dark:text-gray-500 dark:border-[#333]">H</span>
             <input 
               type="number" 
-              className="w-full bg-transparent text-gray-300 p-1.5 text-xs focus:outline-none" 
+              className="w-full bg-transparent text-neutral-800 p-1.5 text-xs focus:outline-none dark:text-gray-300" 
               placeholder={heightLinked ? 'linked' : '100'}
               value={(data.height_percent as string | number | undefined) ?? ''}
               onChange={(e) => updateNodeData(id, { height_percent: e.target.value })}

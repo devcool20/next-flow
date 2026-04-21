@@ -13,7 +13,7 @@ export default async function Home() {
 
   return (
     <Shell>
-      <div className="absolute inset-0 h-full w-full bg-[#0A0A0A]">
+      <div className="absolute inset-0 h-full w-full">
         <WorkflowCanvasWithProviderHydrated workflowId={workflow.id} initialNodes={graph.nodes} initialEdges={graph.edges} />
       </div>
     </Shell>

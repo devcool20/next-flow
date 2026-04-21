@@ -35,7 +35,7 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
     >
       <div className="flex flex-col gap-3 h-full">
         {data.videoUrl ? (
-          <div className="relative w-full h-32 rounded-md overflow-hidden bg-[#1A1A1A] border border-[#333] group">
+          <div className="relative w-full h-32 rounded-md overflow-hidden bg-neutral-100 border border-neutral-200 dark:bg-[#1A1A1A] dark:border-[#333] group">
             <video 
               src={String(data.videoUrl)} 
               className="w-full h-full object-cover" 
@@ -47,7 +47,7 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                <button 
                  onClick={() => fileInputRef.current?.click()}
-                 className="text-white text-xs bg-[#222] hover:bg-[#333] px-3 py-1.5 rounded-md border border-[#444]"
+                 className="text-neutral-700 bg-white hover:bg-neutral-100 px-3 py-1.5 rounded-md border border-neutral-200 dark:text-white text-xs dark:bg-[#222] dark:hover:bg-[#333] dark:border-[#444]"
                >
                  Change Video
                </button>
@@ -56,11 +56,11 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
         ) : (
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="w-full h-32 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#333] rounded-md bg-[#1A1A1A] hover:bg-[#222] hover:border-[#555] transition-colors text-gray-400 group"
+            className="w-full h-32 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 bg-neutral-50 hover:bg-neutral-100 hover:border-neutral-400 text-neutral-400 transition-colors group dark:border-[#333] dark:bg-[#1A1A1A] dark:hover:bg-[#222] dark:hover:border-[#555] dark:text-gray-400"
           >
-            <UploadCloud size={24} className="group-hover:text-orange-400 transition-colors" />
-            <span className="text-xs font-medium">Click to upload</span>
-            <span className="text-[10px] text-gray-500">MP4, MOV max 50MB</span>
+            <UploadCloud size={24} className="group-hover:text-amber-500 text-neutral-400 dark:text-gray-400 transition-colors" />
+            <span className="text-xs font-medium text-neutral-600 dark:text-gray-300">Click to upload</span>
+            <span className="text-[10px] text-neutral-400 dark:text-gray-500">MP4, MOV max 50MB</span>
           </button>
         )}
         

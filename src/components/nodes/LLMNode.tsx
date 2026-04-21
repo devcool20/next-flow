@@ -33,7 +33,7 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
       <div className="flex flex-col gap-3">
         {/* Model Selector */}
         <select
-          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-sm text-gray-300 focus:outline-none focus:border-[#555] transition-colors appearance-none"
+          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-sm text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors appearance-none dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
           value={(data.model as string) || 'gemini-1.5-flash'}
           onChange={(e) => updateNodeData(id, { model: e.target.value })}
         >
@@ -41,21 +41,21 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
           <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
         </select>
         <textarea
-          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-xs text-gray-300 focus:outline-none focus:border-[#555] transition-colors min-h-[56px]"
+          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-xs text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors min-h-[56px] dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
           placeholder={systemLinked ? 'system prompt linked' : 'System prompt (optional)'}
           value={(data.systemPrompt as string) || ''}
           onChange={(e) => updateNodeData(id, { systemPrompt: e.target.value })}
           disabled={systemLinked}
         />
         <textarea
-          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-xs text-gray-300 focus:outline-none focus:border-[#555] transition-colors min-h-[72px]"
+          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-xs text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors min-h-[72px] dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
           placeholder={userLinked ? 'user prompt linked' : 'User message'}
           value={(data.userMessage as string) || ''}
           onChange={(e) => updateNodeData(id, { userMessage: e.target.value })}
           disabled={userLinked}
         />
         <input
-          className="w-full bg-[#1A1A1A] border border-[#333] rounded-md p-2 text-xs text-gray-300 focus:outline-none focus:border-[#555] transition-colors"
+          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-xs text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
           placeholder={imagesLinked ? 'images linked from upstream' : 'Image URL(s), comma-separated (optional)'}
           value={(data.imagesInput as string) || ''}
           onChange={(e) => updateNodeData(id, { imagesInput: e.target.value })}
@@ -64,17 +64,17 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
 
         {/* Output Area */}
         {Boolean(data.output) && (
-          <div className="mt-2 border border-[#333] rounded-md overflow-hidden bg-[#151515]">
+          <div className="mt-2 border border-neutral-200 rounded-md overflow-hidden bg-neutral-50 dark:border-[#333] dark:bg-[#151515]">
             <div 
-              className="flex items-center justify-between p-2 bg-[#222] border-b border-[#333] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+              className="flex items-center justify-between p-2 bg-neutral-200 border-b border-neutral-300 cursor-pointer hover:bg-neutral-300 transition-colors dark:bg-[#222] dark:border-[#333] dark:hover:bg-[#2a2a2a]"
               onClick={() => setExpanded(!expanded)}
             >
-              <span className="text-xs font-semibold text-emerald-400">Response</span>
-              {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Response</span>
+              {expanded ? <ChevronUp size={14} className="text-gray-500 dark:text-gray-400" /> : <ChevronDown size={14} className="text-gray-500 dark:text-gray-400" />}
             </div>
             
             {expanded && (
-              <div className="p-3 text-sm text-gray-300 max-h-[300px] overflow-y-auto prose prose-invert prose-sm">
+              <div className="p-3 text-sm text-neutral-800 max-h-[300px] overflow-y-auto prose prose-sm dark:prose-invert dark:text-gray-300">
                 <ReactMarkdown>{String(data.output)}</ReactMarkdown>
               </div>
             )}
