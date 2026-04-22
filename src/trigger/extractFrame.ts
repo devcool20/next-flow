@@ -1,4 +1,5 @@
 import { logger, task } from "@trigger.dev/sdk/v3";
+import { extractFrameFromVideoToDataUrl } from "@/lib/media-processing";
 
 function validateTimestamp(raw: string): string {
   const value = raw.trim();
@@ -27,14 +28,13 @@ export const extractFrameTask = task({
     const timestamp = validateTimestamp(String(payload.timestamp ?? "0"));
 
     logger.info("Executing frame extraction", { timestamp });
-
-    const frameSeed = Buffer.from(`${videoUrl}|${timestamp}`).toString("base64url").slice(0, 48);
+    const frameUrl = await extractFrameFromVideoToDataUrl({ videoUrl, timestamp });
 
     logger.info("Frame extraction complete");
 
     return {
       message: "Extracted successfully",
-      frameUrl: `https://picsum.photos/seed/frame-${frameSeed}/800/450`,
+      frameUrl,
     };
   },
 });

@@ -34,6 +34,17 @@ type WorkflowRun = {
 };
 export type InteractionMode = 'select' | 'pan' | 'cut';
 
+function dedupeRuns(runs: WorkflowRun[]): WorkflowRun[] {
+  const seen = new Set<string>();
+  const deduped: WorkflowRun[] = [];
+  for (const run of runs) {
+    if (!run?.id || seen.has(run.id)) continue;
+    seen.add(run.id);
+    deduped.push(run);
+  }
+  return deduped;
+}
+
 type WorkflowState = {
   nodes: Node[];
   edges: Edge[];
@@ -383,9 +394,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         throw new Error(errorMessage);
       }
       const run = payload.run;
+      const nextHistory = dedupeRuns([run, ...get().history]);
       set({
         isRunning: false,
-        history: [run, ...get().history],
+        history: nextHistory,
         activeRunId: run.id,
         nodes: get().nodes.map((node) => {
           const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
@@ -445,10 +457,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         throw new Error(errorMessage);
       }
       const run = payload.run;
+      const nextHistory = dedupeRuns([run, ...get().history]);
 
       set({
         isRunning: false,
-        history: [run, ...get().history],
+        history: nextHistory,
         activeRunId: run.id,
         nodes: get().nodes.map((node) => {
           const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
@@ -564,12 +577,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     void get().persistWorkflow();
   },
   initializeWorkspace: (payload) => {
+    const history = dedupeRuns(payload.runs ?? []);
     set({
       workflowId: payload.workflowId,
       nodes: payload.nodes,
       edges: payload.edges.map(normalizeEdgeVisual),
-      history: payload.runs ?? [],
-      activeRunId: payload.runs?.[0]?.id ?? null,
+      history,
+      activeRunId: history[0]?.id ?? null,
       graphPast: [],
       graphFuture: [],
       isHydrated: true,
@@ -581,9 +595,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const response = await fetch(`/api/runs?workflowId=${workflowId}`, { method: 'GET' });
     if (!response.ok) return;
     const payload = (await response.json()) as { runs: WorkflowRun[] };
+    const history = dedupeRuns(payload.runs ?? []);
     set({
-      history: payload.runs ?? [],
-      activeRunId: get().activeRunId ?? payload.runs?.[0]?.id ?? null,
+      history,
+      activeRunId: get().activeRunId ?? history[0]?.id ?? null,
     });
   },
   persistWorkflow: async () => {

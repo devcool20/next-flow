@@ -234,7 +234,7 @@ async function triggerTaskAndPoll<TOutput = unknown>(taskId: string, payload: un
   }
 
   const handle = await tasks.trigger(taskId, payload);
-  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 5000);
+  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 15000);
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1000) {
     throw new AppError('invalid_input', 'TRIGGER_POLL_TIMEOUT_MS must be a number >= 1000.', 500, {
       value: process.env.TRIGGER_POLL_TIMEOUT_MS,

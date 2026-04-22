@@ -47,5 +47,22 @@ export function toAppError(error: unknown, fallbackMessage = 'Unexpected server 
   }
 
   const message = error instanceof Error ? error.message : fallbackMessage;
+
+  if (typeof message === 'string' && message.includes('ffmpeg_binary_unavailable')) {
+    return new AppError('dependency_unavailable', 'FFmpeg binary is unavailable for media processing.', 503, {
+      dependency: 'ffmpeg',
+      hint: 'Set FFMPEG_BINARY or ensure ffmpeg-static is available to the Node runtime.',
+      raw: message,
+    });
+  }
+
+  if (typeof message === 'string' && (message.includes('ffmpeg_spawn_failed') || message.includes('ffmpeg_metadata_failed'))) {
+    return new AppError('task_failed', 'Media processing failed while running FFmpeg.', 502, {
+      dependency: 'ffmpeg',
+      hint: 'Verify ffmpeg binary permissions and media input validity.',
+      raw: message,
+    });
+  }
+
   return new AppError('execution_failed', message || fallbackMessage, 500);
 }

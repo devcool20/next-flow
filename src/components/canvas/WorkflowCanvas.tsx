@@ -301,12 +301,12 @@ function WorkflowCanvasBody({
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={0.8} color="var(--dot-color)" />
         <Controls 
-          className="nextflow-controls !bg-[#1a1a1a]/95 backdrop-blur-md !border !border-white/10 !text-[#8e8e8e] !rounded-xl overflow-hidden shadow-2xl [&>button]:!border-white/5 [&>button]:hover:!bg-white/10 [&>button]:hover:!text-white [&>button]:transition-colors" 
+          className="nextflow-controls !bottom-3 !right-3 !z-30 !bg-[#1a1a1a]/95 backdrop-blur-md !border !border-white/10 !text-[#8e8e8e] !rounded-xl overflow-hidden shadow-2xl [&>button]:!border-white/5 [&>button]:hover:!bg-white/10 [&>button]:hover:!text-white [&>button]:transition-colors" 
           position="bottom-right" 
           showInteractive={false} 
         />
         <MiniMap
-          className="!bg-[#1a1a1a]/90 !border !border-white/10 !rounded-xl !bottom-3 !right-3 shadow-2xl overflow-hidden"
+          className="!bg-[#1a1a1a]/90 !border !border-white/10 !rounded-xl !bottom-3 !right-20 !z-20 shadow-2xl overflow-hidden"
           nodeColor={(n) => {
             if (n.type === 'llm') return '#FFC700';
             if (n.type === 'image' || n.type === 'crop' || n.type === 'extract') return '#4b9cff';

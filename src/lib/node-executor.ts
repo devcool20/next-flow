@@ -1,8 +1,18 @@
 import type { Node } from '@xyflow/react';
 import type { NodeIOMap } from '@/lib/workflow-engine';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { cropImageToDataUrl, extractFrameFromVideoToDataUrl } from '@/lib/media-processing';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function parsePercent(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
 
 export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIOMap> {
   const data = node.data ?? {};
@@ -24,19 +34,22 @@ export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIO
   if (node.type === 'crop') {
     const imageUrl = String(inputs.image_url ?? data.imageUrl ?? '');
     if (!imageUrl) throw new Error('Crop node is missing image_url input.');
-    await delay(850);
-    return {
-      output: `${imageUrl}?cropped=true&x=${data.x_percent ?? 0}&y=${data.y_percent ?? 0}&w=${data.width_percent ?? 100}&h=${data.height_percent ?? 100}`,
-    };
+    const output = await cropImageToDataUrl({
+      imageUrl,
+      x: parsePercent(inputs.x_percent ?? data.x_percent, 0),
+      y: parsePercent(inputs.y_percent ?? data.y_percent, 0),
+      w: parsePercent(inputs.width_percent ?? data.width_percent, 100),
+      h: parsePercent(inputs.height_percent ?? data.height_percent, 100),
+    });
+    return { output };
   }
 
   if (node.type === 'extract') {
     const videoUrl = String(inputs.video_url ?? data.videoUrl ?? '');
     if (!videoUrl) throw new Error('Extract node is missing video_url input.');
-    const timestamp = String(data.timestamp ?? '5s');
-    await delay(950);
-    const frameSeed = Buffer.from(`${videoUrl}|${timestamp}`).toString('base64url').slice(0, 48);
-    return { output: `https://picsum.photos/seed/frame-${frameSeed}/800/450` };
+    const timestamp = String(inputs.timestamp ?? data.timestamp ?? '0');
+    const output = await extractFrameFromVideoToDataUrl({ videoUrl, timestamp });
+    return { output };
   }
 
   if (node.type === 'llm') {

@@ -16,7 +16,7 @@ type AssetEntry = {
 };
 
 function looksLikeUrl(value: string) {
-  return /^(https?:\/\/|blob:)/i.test(value.trim());
+  return /^(https?:\/\/|blob:|data:image\/|data:video\/)/i.test(value.trim());
 }
 
 function extractUrls(value: unknown, collector: Set<string>) {
@@ -42,6 +42,12 @@ function extractUrls(value: unknown, collector: Set<string>) {
 }
 
 function inferAssetKind(url: string, source: string): AssetKind {
+  if (/^data:video\//i.test(url)) {
+    return 'video';
+  }
+  if (/^data:image\//i.test(url)) {
+    return 'image';
+  }
   if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url) || /video/i.test(source)) {
     return 'video';
   }
@@ -65,6 +71,19 @@ function formatRelativeTime(dateIso: string) {
 }
 
 function renderFormattedValue(value: string) {
+  const trimmed = value.trim();
+  if (/^data:image\//i.test(trimmed)) {
+    return [
+      <span key="data-image-label">Inline image output</span>,
+      <div key="data-image-preview" className="my-1.5 flex flex-col gap-1.5">
+        <div className="relative h-24 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-inner transition-colors">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={trimmed} alt="Output Preview" className="h-full w-full object-cover" />
+        </div>
+      </div>,
+    ];
+  }
+
   const urlRegex = /(https?:\/\/[^\s"']+)/g;
   const parts = value.split(urlRegex);
   return parts.map((part, i) => {
@@ -104,8 +123,7 @@ function renderFormattedValue(value: string) {
 
 import type { ThemeMode } from './Shell';
 
-export default function RightSidebar({ isOpen, mode, theme: _theme }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
-  void _theme;
+export default function RightSidebar({ isOpen, mode, theme = 'dark' }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
   const nodes = useWorkflowStore((state) => state.nodes);
   const history = useWorkflowStore((state) => state.history);
   const isRunning = useWorkflowStore((state) => state.isRunning);
@@ -196,12 +214,15 @@ export default function RightSidebar({ isOpen, mode, theme: _theme }: { isOpen: 
   return (
     <aside
       className={clsx(
-        'relative z-20 flex flex-col border-l border-[#222222] bg-[#0b0d10] transition-all duration-300',
+        'relative z-20 flex flex-col border-l transition-all duration-300',
+        theme === 'dark'
+          ? 'border-[#222222] bg-[#0b0d10]'
+          : 'border-neutral-200/70 bg-white/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md',
         isOpen ? 'w-[22rem]' : 'w-0 overflow-hidden'
       )}
     >
-      <div className="flex min-w-[22rem] items-center justify-between border-b border-[#1f242b] px-4 py-4">
-        <div className="flex items-center gap-2 text-[#e5ebf6]">
+      <div className={clsx('flex min-w-[22rem] items-center justify-between border-b px-4 py-4', theme === 'dark' ? 'border-[#1f242b]' : 'border-[#e2e8f0]')}>
+        <div className={clsx('flex items-center gap-2', theme === 'dark' ? 'text-[#e5ebf6]' : 'text-[#0f172a]')}>
           {mode === 'assets' ? <ImageIcon className="h-4 w-4" /> : <History className="h-4 w-4" />}
           <span className="text-sm font-semibold">{mode === 'assets' ? 'Asset History' : 'Version History'}</span>
         </div>
@@ -209,7 +230,7 @@ export default function RightSidebar({ isOpen, mode, theme: _theme }: { isOpen: 
 
       <div className="custom-scrollbar flex min-w-[22rem] flex-1 flex-col overflow-y-auto p-4">
         {mode === 'assets' ? (
-          <AssetHistoryView assets={assets} />
+          <AssetHistoryView assets={assets} theme={theme} />
         ) : (
           <VersionHistoryView
             history={history}
@@ -220,6 +241,7 @@ export default function RightSidebar({ isOpen, mode, theme: _theme }: { isOpen: 
             runWorkflow={runWorkflow}
             runSelectedWorkflow={runSelectedWorkflow}
             selectHistoryRun={selectHistoryRun}
+            theme={theme}
           />
         )}
       </div>
@@ -227,25 +249,34 @@ export default function RightSidebar({ isOpen, mode, theme: _theme }: { isOpen: 
   );
 }
 
-function NodeRunItem({ nodeRun, isSelected }: { nodeRun: NodeRunRecord; isSelected: boolean | undefined }) {
+function NodeRunItem({
+  nodeRun,
+  isSelected,
+  theme,
+}: {
+  nodeRun: NodeRunRecord;
+  isSelected: boolean | undefined;
+  theme: ThemeMode;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const duration = ((new Date(nodeRun.finishedAt).getTime() - new Date(nodeRun.startedAt).getTime()) / 1000).toFixed(1);
 
   return (
     <div className="group relative pl-6 pb-4 last:pb-0">
       {/* Tree Lines */}
-      <div className="absolute left-0 top-0 h-full w-[1px] bg-[#2a2f37]" />
-      <div className="absolute left-0 top-2.5 h-[1px] w-4 bg-[#2a2f37]" />
+      <div className={clsx('absolute left-0 top-0 h-full w-[1px]', theme === 'dark' ? 'bg-[#2a2f37]' : 'bg-[#d9e2ef]')} />
+      <div className={clsx('absolute left-0 top-2.5 h-[1px] w-4', theme === 'dark' ? 'bg-[#2a2f37]' : 'bg-[#d9e2ef]')} />
 
       <div
         className={clsx(
-          'flex flex-col gap-1.5 transition-all duration-200 cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg',
-          isSelected && 'bg-white/5 border border-white/5 shadow-sm'
+          'flex cursor-pointer flex-col gap-1.5 rounded-lg p-2 -ml-2 transition-all duration-200',
+          theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-[#f1f5fb]',
+          isSelected && (theme === 'dark' ? 'border border-white/5 bg-white/5 shadow-sm' : 'border border-[#d8e3f2] bg-[#eef4ff] shadow-sm')
         )}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
-          <span className="text-[12px] font-medium text-[#e6edf9]">{nodeRun.title}</span>
+          <span className={clsx('text-[12px] font-medium', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>{nodeRun.title}</span>
           {nodeRun.status === 'success' ? (
             <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-500">
               <svg viewBox="0 0 24 24" className="h-2 w-2 fill-none stroke-current stroke-[3]" xmlns="http://www.w3.org/2000/svg">
@@ -260,18 +291,18 @@ function NodeRunItem({ nodeRun, isSelected }: { nodeRun: NodeRunRecord; isSelect
               </svg>
             </div>
           )}
-          <span className="text-[10px] text-[#8592a8]">{duration}s</span>
+          <span className={clsx('text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>{duration}s</span>
         </div>
 
         {/* Output/Error nesting */}
         <div className="relative pl-4 space-y-1">
-          <div className="absolute left-0 top-0 h-full w-[1px] border-l border-dashed border-[#2a2f37]" />
-          <div className="absolute left-0 top-2 h-[1px] w-3 border-t border-dashed border-[#2a2f37]" />
+          <div className={clsx('absolute left-0 top-0 h-full w-[1px] border-l border-dashed', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#d9e2ef]')} />
+          <div className={clsx('absolute left-0 top-2 h-[1px] w-3 border-t border-dashed', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#d9e2ef]')} />
 
           {!isExpanded ? (
             nodeRun.status === 'success' ? (
-              <div className="flex overflow-hidden gap-1 text-[11px] text-[#9ca7bb]">
-                <span className="shrink-0 font-semibold text-[#8592a8]">Output:</span>
+              <div className={clsx('flex overflow-hidden gap-1 text-[11px]', theme === 'dark' ? 'text-[#9ca7bb]' : 'text-[#475569]')}>
+                <span className={clsx('shrink-0 font-semibold', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Output:</span>
                 <span className="truncate opacity-80 italic">
                   {renderFormattedValue(
                     (() => {
@@ -291,14 +322,14 @@ function NodeRunItem({ nodeRun, isSelected }: { nodeRun: NodeRunRecord; isSelect
           ) : (
             <div className="animate-in fade-in slide-in-from-top-1 space-y-3 pt-2 duration-200">
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-tight text-[#8592a8]">Inputs</p>
-                <div className="custom-scrollbar max-h-48 overflow-y-auto rounded-lg border border-white/5 bg-black/40 p-2 font-mono text-[11px] text-[#9ca7bb]">
+                <p className={clsx('text-[10px] font-bold uppercase tracking-tight', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Inputs</p>
+                <div className={clsx('custom-scrollbar max-h-48 overflow-y-auto rounded-lg border p-2 font-mono text-[11px]', theme === 'dark' ? 'border-white/5 bg-black/40 text-[#9ca7bb]' : 'border-[#dbe5f3] bg-[#f8fbff] text-[#334155]')}>
                   <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.inputs, null, 2)}</pre>
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-tight text-[#8592a8]">Outputs</p>
-                <div className="custom-scrollbar max-h-64 overflow-y-auto rounded-lg border border-white/5 bg-black/40 p-2 font-mono text-[11px] text-[#e6edf9]">
+                <p className={clsx('text-[10px] font-bold uppercase tracking-tight', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Outputs</p>
+                <div className={clsx('custom-scrollbar max-h-64 overflow-y-auto rounded-lg border p-2 font-mono text-[11px]', theme === 'dark' ? 'border-white/5 bg-black/40 text-[#e6edf9]' : 'border-[#dbe5f3] bg-[#f8fbff] text-[#0f172a]')}>
                   <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.outputs, null, 2)}</pre>
                 </div>
               </div>
@@ -318,11 +349,11 @@ function NodeRunItem({ nodeRun, isSelected }: { nodeRun: NodeRunRecord; isSelect
   );
 }
 
-function AssetHistoryView({ assets }: { assets: AssetEntry[] }) {
+function AssetHistoryView({ assets, theme }: { assets: AssetEntry[]; theme: ThemeMode }) {
   if (assets.length === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-left">
-        <p className="text-base leading-6 text-[#8d95a5]">
+        <p className={clsx('text-base leading-6', theme === 'dark' ? 'text-[#8d95a5]' : 'text-[#64748b]')}>
           Results will appear here as nodes begin to generate outputs
         </p>
       </div>
@@ -332,8 +363,8 @@ function AssetHistoryView({ assets }: { assets: AssetEntry[] }) {
   return (
     <div className="space-y-3">
       {assets.map((asset) => (
-        <article key={asset.id} className="overflow-hidden rounded-2xl border border-[#2a2f37] bg-[#161a1f]">
-          <div className="relative h-40 w-full bg-[#0f1216]">
+        <article key={asset.id} className={clsx('overflow-hidden rounded-2xl border', theme === 'dark' ? 'border-[#2a2f37] bg-[#161a1f]' : 'border-[#dbe5f3] bg-[#f8fbff]')}>
+          <div className={clsx('relative h-40 w-full', theme === 'dark' ? 'bg-[#0f1216]' : 'bg-[#eff5fd]')}>
             {asset.kind === 'video' ? (
               <video src={asset.url} className="h-full w-full object-cover" autoPlay muted loop playsInline />
             ) : (
@@ -342,8 +373,8 @@ function AssetHistoryView({ assets }: { assets: AssetEntry[] }) {
             )}
           </div>
           <div className="flex items-center justify-between px-3 py-2">
-            <p className="truncate text-xs font-medium text-[#e4ebf8]">{asset.source}</p>
-            <p className="text-[11px] text-[#8592a8]">
+            <p className={clsx('truncate text-xs font-medium', theme === 'dark' ? 'text-[#e4ebf8]' : 'text-[#0f172a]')}>{asset.source}</p>
+            <p className={clsx('text-[11px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
               {asset.timestamp ? formatRelativeTime(asset.timestamp) : asset.kind}
             </p>
           </div>
@@ -362,6 +393,7 @@ function VersionHistoryView({
   runWorkflow,
   runSelectedWorkflow,
   selectHistoryRun,
+  theme,
 }: {
   history: ReturnType<typeof useWorkflowStore.getState>['history'];
   activeRunId: string | null;
@@ -371,6 +403,7 @@ function VersionHistoryView({
   runWorkflow: () => Promise<void>;
   runSelectedWorkflow: () => Promise<void>;
   selectHistoryRun: (runId: string) => void;
+  theme: ThemeMode;
 }) {
   const restoreRunVersion = useWorkflowStore((state) => state.restoreRunVersion);
   const [restoringRunId, setRestoringRunId] = useState<string | null>(null);
@@ -393,7 +426,12 @@ function VersionHistoryView({
         <button
           onClick={() => void runWorkflow()}
           disabled={isRunning}
-          className="flex items-center justify-center gap-2 rounded-xl border border-[#313844] bg-[#1a1f26] py-2 text-xs font-semibold text-[#e6edf9] transition-colors hover:bg-[#242a33] disabled:opacity-50"
+          className={clsx(
+            'flex items-center justify-center gap-2 rounded-xl border py-2 text-xs font-semibold transition-colors disabled:opacity-50',
+            theme === 'dark'
+              ? 'border-[#313844] bg-[#1a1f26] text-[#e6edf9] hover:bg-[#242a33]'
+              : 'border-[#d2ddeb] bg-white text-[#0f172a] hover:bg-[#f1f5fb]'
+          )}
         >
           <PlayCircle size={14} />
           Run Workflow
@@ -401,7 +439,12 @@ function VersionHistoryView({
         <button
           onClick={() => void runSelectedWorkflow()}
           disabled={isRunning}
-          className="flex items-center justify-center gap-2 rounded-xl border border-[#313844] bg-[#1a1f26] py-2 text-xs font-semibold text-[#e6edf9] transition-colors hover:bg-[#242a33] disabled:opacity-50"
+          className={clsx(
+            'flex items-center justify-center gap-2 rounded-xl border py-2 text-xs font-semibold transition-colors disabled:opacity-50',
+            theme === 'dark'
+              ? 'border-[#313844] bg-[#1a1f26] text-[#e6edf9] hover:bg-[#242a33]'
+              : 'border-[#d2ddeb] bg-white text-[#0f172a] hover:bg-[#f1f5fb]'
+          )}
         >
           <Filter size={14} />
           Run Selected
@@ -409,11 +452,11 @@ function VersionHistoryView({
       </div>
 
       {activeRun && (
-        <div className="rounded-2xl border border-[#2a2f37] bg-[#141920] p-4">
-          <div className="mb-4 flex items-center justify-between border-b border-[#2a2f37] pb-3">
+        <div className={clsx('rounded-2xl border p-4', theme === 'dark' ? 'border-[#2a2f37] bg-[#141920]' : 'border-[#dbe5f3] bg-white')}>
+          <div className={clsx('mb-4 flex items-center justify-between border-b pb-3', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#e2e8f0]')}>
             <div className="flex flex-col gap-0.5">
-              <p className="text-[13px] font-bold text-[#e6edf9]">Current Run Details</p>
-              <p className="text-[10px] text-[#8592a8]">
+              <p className={clsx('text-[13px] font-bold', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>Current Run Details</p>
+              <p className={clsx('text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
                 {new Date(activeRun.startedAt).toLocaleString([], {
                   month: 'short',
                   day: 'numeric',
@@ -427,13 +470,14 @@ function VersionHistoryView({
 
           <div className="relative space-y-0">
             {activeRun.nodeRuns.length === 0 ? (
-              <p className="py-4 text-center text-[11px] text-[#8592a8]">No nodes executed in this run</p>
+              <p className={clsx('py-4 text-center text-[11px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>No nodes executed in this run</p>
             ) : (
               activeRun.nodeRuns.map((nodeRun) => (
                 <NodeRunItem
                   key={nodeRun.executionId}
                   nodeRun={nodeRun}
                   isSelected={nodes.find((n) => n.id === nodeRun.nodeId)?.selected}
+                  theme={theme}
                 />
               ))
             )}
@@ -443,19 +487,25 @@ function VersionHistoryView({
 
       {history.length > 0 && (
         <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#5c6471]">History</p>
+          <p className={clsx('text-[10px] font-bold uppercase tracking-widest', theme === 'dark' ? 'text-[#5c6471]' : 'text-[#64748b]')}>History</p>
           <div className="space-y-2">
-            {history.map((run) => (
+            {history.map((run, index) => (
               <button
-                key={run.id}
+                key={`${run.id}-${index}`}
                 onClick={() => handleRunClick(run.id)}
                 className={clsx(
                   'w-full rounded-xl border p-3 text-left transition-colors',
-                  run.id === activeRunId ? 'border-[#4b9cff] bg-[#1a2433]' : 'border-[#2a2f37] bg-[#161a1f] hover:bg-[#1d222a]'
+                  run.id === activeRunId
+                    ? theme === 'dark'
+                      ? 'border-[#4b9cff] bg-[#1a2433]'
+                      : 'border-[#4b9cff] bg-[#e9f2ff]'
+                    : theme === 'dark'
+                      ? 'border-[#2a2f37] bg-[#161a1f] hover:bg-[#1d222a]'
+                      : 'border-[#dbe5f3] bg-white hover:bg-[#f5f8fd]'
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-[#e6edf9]">
+                  <span className={clsx('text-[11px] font-medium', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>
                     {formatRelativeTime(run.startedAt)}
                   </span>
                   <span className={clsx(
@@ -465,8 +515,8 @@ function VersionHistoryView({
                     {run.status}
                   </span>
                 </div>
-                <p className="mt-1 text-[10px] text-[#8592a8]">
-                  {run.nodeRuns.length} node{run.nodeRuns.length === 1 ? '' : 's'} • {run.scope} run
+                <p className={clsx('mt-1 text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
+                  {run.nodeRuns.length} node{run.nodeRuns.length === 1 ? '' : 's'} | {run.scope} run
                 </p>
               </button>
             ))}
@@ -477,15 +527,18 @@ function VersionHistoryView({
       {/* Restore Confirmation Modal */}
       {restoringRunId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[#2a2f37] bg-[#141920] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-semibold text-white mb-2">Restore Version?</h3>
-            <p className="text-sm text-[#8592a8] mb-6">
+          <div className={clsx('w-full max-w-sm rounded-2xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200', theme === 'dark' ? 'border-[#2a2f37] bg-[#141920]' : 'border-[#dbe5f3] bg-white')}>
+            <h3 className={clsx('mb-2 text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-[#0f172a]')}>Restore Version?</h3>
+            <p className={clsx('mb-6 text-sm', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
               Do you want to replace the current screen with this version of the workflow? This will restore all node outputs and statuses from that run.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setRestoringRunId(null)}
-                className="flex-1 rounded-xl bg-[#242a33] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#2d3540]"
+                className={clsx(
+                  'flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors',
+                  theme === 'dark' ? 'bg-[#242a33] text-white hover:bg-[#2d3540]' : 'bg-[#eef2f8] text-[#0f172a] hover:bg-[#e4ebf5]'
+                )}
               >
                 Cancel
               </button>
@@ -502,3 +555,4 @@ function VersionHistoryView({
     </div>
   );
 }
+

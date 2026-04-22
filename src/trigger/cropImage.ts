@@ -1,4 +1,5 @@
 import { logger, task } from "@trigger.dev/sdk/v3";
+import { cropImageToDataUrl } from "@/lib/media-processing";
 
 function parseAndValidatePercent(value: number, name: string) {
   if (!Number.isFinite(value) || value < 0 || value > 100) {
@@ -27,10 +28,7 @@ export const cropImageTask = task({
     }
 
     logger.info("Executing crop operation");
-
-    // Deterministic cropped URL seed (placeholder for FFmpeg+storage in production)
-    const seed = Buffer.from(`${imageUrl}|${x}|${y}|${w}|${h}`).toString("base64url").slice(0, 48);
-    const croppedUrl = `https://picsum.photos/seed/crop-${seed}/800/800`;
+    const croppedUrl = await cropImageToDataUrl({ imageUrl, x, y, w, h });
 
     logger.info("Image crop complete");
 
