@@ -35,14 +35,18 @@ export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIO
     if (!videoUrl) throw new Error('Extract node is missing video_url input.');
     const timestamp = String(data.timestamp ?? '5s');
     await delay(950);
-    return { output: `${videoUrl}?frame=${encodeURIComponent(timestamp)}` };
+    const frameSeed = Buffer.from(`${videoUrl}|${timestamp}`).toString('base64url').slice(0, 48);
+    return { output: `https://picsum.photos/seed/frame-${frameSeed}/800/450` };
   }
 
   if (node.type === 'llm') {
-    const userMessage = String(inputs.user_message ?? data.userMessage ?? '');
+    const rawUserMessage = inputs.user_message ?? data.userMessage ?? '';
+    const userMessage = Array.isArray(rawUserMessage) ? rawUserMessage.join('\n\n') : String(rawUserMessage);
+    
     if (!userMessage) throw new Error('LLM node requires a user message.');
 
-    const systemPrompt = String(inputs.system_prompt ?? data.systemPrompt ?? '');
+    const rawSystemPrompt = inputs.system_prompt ?? data.systemPrompt ?? '';
+    const systemPrompt = Array.isArray(rawSystemPrompt) ? rawSystemPrompt.join('\n\n') : String(rawSystemPrompt);
     
     let images: string[] = [];
     if (Array.isArray(inputs.images)) {
@@ -65,18 +69,15 @@ export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIO
         systemPrompt ? `System: ${systemPrompt}` : 'System: (none)',
         `Prompt: ${userMessage}`,
         `Images: ${images.length}`,
-      ].join('\\n');
+      ].join('\n');
       return { output: mockResponse };
     }
 
-    try {
+      try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      let modelIdentifier = String(data.model ?? 'gemini-2.5-flash');
-      
-      // Map legacy models to currently available versions in this environment
-      if (modelIdentifier === 'gemini-1.5-flash') modelIdentifier = 'gemini-2.5-flash';
-      if (modelIdentifier === 'gemini-1.5-pro') modelIdentifier = 'gemini-2.5-pro';
-      
+      const requestedModel = String(data.model ?? 'gemini-2.5-flash').toLowerCase();
+      const modelIdentifier = requestedModel.includes('pro') ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+
       const model = genAI.getGenerativeModel({
         model: modelIdentifier,
         ...(systemPrompt && { systemInstruction: systemPrompt }),
@@ -97,6 +98,10 @@ export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIO
             const arrayBuffer = await imageResp.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const mimeType = imageResp.headers.get('content-type') || 'image/jpeg';
+            if (!mimeType.startsWith('image/')) {
+              console.warn(`Skipping non-image URL for LLM image input: ${imageUrl} (${mimeType})`);
+              continue;
+            }
             promptParts.push({
               inlineData: {
                 data: buffer.toString('base64'),

@@ -18,7 +18,7 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
   return (
     <BaseNode
       id={id}
-      title="Crop Image"
+      title={String(data.label || 'Crop Image')}
       icon={<Crop size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
@@ -35,6 +35,12 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
       ]}
     >
       <div className="flex flex-col gap-3">
+        {Boolean(data.output) && (
+          <div className="relative w-full h-32 rounded-md overflow-hidden bg-neutral-100 border border-neutral-200 dark:bg-[#1A1A1A] dark:border-[#333]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={String(data.output)} alt="Cropped" className="w-full h-full object-cover" />
+          </div>
+        )}
         <label className="text-xs text-gray-400 font-medium">Crop Parameters (%)</label>
         
         <div className="grid grid-cols-2 gap-2">

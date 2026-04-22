@@ -16,6 +16,10 @@ import { z } from 'zod';
 import type { NodeRunRecord } from '@/lib/workflow-engine';
 import { workflowSamples } from '@/lib/samples';
 
+type ApiErrorPayload = {
+  error?: string | { code?: string; message?: string };
+};
+
 type WorkflowRun = {
   id: string;
   startedAt: string;
@@ -55,6 +59,7 @@ type WorkflowState = {
   runWorkflow: () => Promise<void>;
   runSelectedWorkflow: () => Promise<void>;
   selectHistoryRun: (runId: string) => void;
+  restoreRunVersion: (runId: string) => void;
   undoGraph: () => void;
   redoGraph: () => void;
   loadSampleWorkflow: (sampleId?: string) => void;
@@ -371,28 +376,32 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workflowId, nodes, edges, scope: 'full' }),
       });
-      const payload = (await response.json()) as { run?: WorkflowRun; error?: string };
+      const payload = (await response.json()) as { run?: WorkflowRun } & ApiErrorPayload;
+      const errorMessage =
+        typeof payload.error === 'string' ? payload.error : payload.error?.message ?? 'Run failed';
       if (!response.ok || !payload.run) {
-        throw new Error(payload.error ?? 'Run failed');
+        throw new Error(errorMessage);
       }
       const run = payload.run;
       set({
         isRunning: false,
         history: [run, ...get().history],
         activeRunId: run.id,
-        nodes: get().nodes.map((node) => ({
-          ...node,
-          data: {
-            ...node.data,
-            highlighted: run.executionPath.includes(node.id),
-            ...(run.nodeRuns.find((entry) => entry.nodeId === node.id)?.outputs.output
-              ? { output: run.nodeRuns.find((entry) => entry.nodeId === node.id)?.outputs.output }
-              : {}),
-            status: run.nodeRuns.find((entry) => entry.nodeId === node.id)?.status ?? node.data?.status,
-          },
-        })),
+        nodes: get().nodes.map((node) => {
+          const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              highlighted: run.executionPath.includes(node.id),
+              ...(runEntry?.outputs ? runEntry.outputs : {}),
+              status: runEntry?.status ?? node.data?.status,
+            },
+          };
+        }),
       });
-    } catch (error) {
+      void get().fetchRuns();
+    } catch {
       set({
         isRunning: false,
         nodes: get().nodes.map((node) => ({
@@ -402,20 +411,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             status: node.data?.status === 'running' ? 'error' : node.data?.status,
           },
         })),
-        history: [
-          {
-            id: `run_${Date.now()}`,
-            startedAt: new Date().toISOString(),
-            finishedAt: new Date().toISOString(),
-            status: 'error',
-            nodeRuns: [],
-            executionPath: [],
-            error: error instanceof Error ? error.message : 'Workflow failed',
-            scope: 'full',
-          },
-          ...get().history,
-        ],
       });
+      void get().fetchRuns();
     }
   },
   runSelectedWorkflow: async () => {
@@ -441,9 +438,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workflowId, nodes, edges, selectedNodeIds, scope }),
       });
-      const payload = (await response.json()) as { run?: WorkflowRun; error?: string };
+      const payload = (await response.json()) as { run?: WorkflowRun } & ApiErrorPayload;
+      const errorMessage =
+        typeof payload.error === 'string' ? payload.error : payload.error?.message ?? 'Selected run failed';
       if (!response.ok || !payload.run) {
-        throw new Error(payload.error ?? 'Selected run failed');
+        throw new Error(errorMessage);
       }
       const run = payload.run;
 
@@ -451,19 +450,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         isRunning: false,
         history: [run, ...get().history],
         activeRunId: run.id,
-        nodes: get().nodes.map((node) => ({
-          ...node,
-          data: {
-            ...node.data,
-            highlighted: run.executionPath.includes(node.id),
-            ...(run.nodeRuns.find((entry) => entry.nodeId === node.id)?.outputs.output
-              ? { output: run.nodeRuns.find((entry) => entry.nodeId === node.id)?.outputs.output }
-              : {}),
-            status: run.nodeRuns.find((entry) => entry.nodeId === node.id)?.status ?? node.data?.status,
-          },
-        })),
+        nodes: get().nodes.map((node) => {
+          const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              highlighted: run.executionPath.includes(node.id),
+              ...(runEntry?.outputs ? runEntry.outputs : {}),
+              status: runEntry?.status ?? node.data?.status,
+            },
+          };
+        }),
       });
-    } catch (error) {
+      void get().fetchRuns();
+    } catch {
       set({
         isRunning: false,
         nodes: get().nodes.map((node) => ({
@@ -473,21 +474,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             status: node.data?.status === 'running' ? 'error' : node.data?.status,
           },
         })),
-        history: [
-          {
-            id: `run_${Date.now()}`,
-            startedAt: new Date().toISOString(),
-            finishedAt: new Date().toISOString(),
-            status: 'error',
-            nodeRuns: [],
-            executionPath: [],
-            selectedNodeIds,
-            error: error instanceof Error ? error.message : 'Selected run failed',
-            scope: selectedNodeIds.length === 1 ? 'single' : 'partial',
-          },
-          ...get().history,
-        ],
       });
+      void get().fetchRuns();
     }
   },
   selectHistoryRun: (runId: string) => {
@@ -503,6 +491,34 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         data: { ...node.data, highlighted: run.executionPath.includes(node.id) },
       })),
     });
+  },
+  restoreRunVersion: (runId: string) => {
+    const run = get().history.find((item) => item.id === runId);
+    if (!run) return;
+
+    const state = get();
+    const nextNodes = state.nodes.map((node) => {
+      const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
+      if (runEntry) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...(runEntry.outputs || {}),
+            status: runEntry.status,
+          },
+        };
+      }
+      return node;
+    });
+
+    set({
+      nodes: nextNodes,
+      activeRunId: runId,
+      graphPast: nextPastStack(state.graphPast, state.nodes, state.edges),
+      graphFuture: [],
+    });
+    void get().persistWorkflow();
   },
   undoGraph: () => {
     const state = get();

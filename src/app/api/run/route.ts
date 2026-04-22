@@ -2,12 +2,12 @@ import type { Edge, Node } from '@xyflow/react';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Prisma } from '@prisma/client';
-import { tasks } from '@trigger.dev/sdk/v3';
+import { runs, tasks } from '@trigger.dev/sdk/v3';
 import { prisma } from '@/lib/prisma';
 import { ensureUserAndWorkflow } from '@/lib/workspace-server';
-import { executeWorkflow, type NodeRunRecord } from '@/lib/workflow-engine';
+import { executeWorkflow, type NodeRunRecord, type NodeIOMap } from '@/lib/workflow-engine';
 import { executeNode as executeNodeLocal } from '@/lib/node-executor';
-import type { NodeIOMap } from '@/lib/workflow-engine';
+import { AppError, toAppError } from '@/lib/api-errors';
 
 type RunBody = {
   workflowId: string;
@@ -17,179 +17,466 @@ type RunBody = {
   scope: 'full' | 'partial' | 'single';
 };
 
-export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+type DependencyState = {
+  database: 'ok' | 'unavailable';
+  trigger: 'ok' | 'unavailable' | 'not_required';
+  gemini: 'ok' | 'unavailable' | 'not_required';
+};
+
+const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro']);
+const FORCE_TRIGGER_ONLY = process.env.NEXTFLOW_FORCE_TRIGGER_ONLY === 'true';
+const ALLOW_LOCAL_FALLBACK =
+  (process.env.NEXTFLOW_ALLOW_LOCAL_FALLBACK ?? (process.env.NODE_ENV === 'production' ? 'false' : 'true')) === 'true';
+
+function isNodeDisabled(node: Node): boolean {
+  return Boolean(node.data?.disabled);
+}
+
+function parseNumberInput(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function validatePercent(name: string, value: number): number {
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw new AppError('invalid_input', `${name} must be between 0 and 100.`, 400, { field: name, value });
+  }
+  return value;
+}
+
+function validateTimestamp(timestamp: string): string {
+  const value = timestamp.trim();
+  if (!value) return '0';
+
+  const isPercent = /^\d+(?:\.\d+)?%$/.test(value);
+  const isSeconds = /^\d+(?:\.\d+)?(?:s)?$/i.test(value);
+
+  if (!isPercent && !isSeconds) {
+    throw new AppError('invalid_input', 'Timestamp must be seconds (e.g. 5 or 5s) or percentage (e.g. 50%).', 400, {
+      field: 'timestamp',
+      value,
+    });
   }
 
-  const body = (await request.json()) as RunBody;
-  const { user } = await ensureUserAndWorkflow(userId);
+  return value;
+}
 
-  const workflow = await prisma.workflow.findFirst({
-    where: { id: body.workflowId, userId: user.id },
-  });
-  if (!workflow) {
-    return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
+function composeTextInput(value: unknown, label: string): string {
+  if (Array.isArray(value)) {
+    const entries = value
+      .map((item, index) => `[${label} ${index + 1}]\n${String(item ?? '').trim()}`)
+      .filter((entry) => entry.trim() !== `[${label} 1]`);
+    return entries.join('\n\n');
+  }
+  return String(value ?? '').trim();
+}
+
+function buildLlmPayload(node: Node, inputs: NodeIOMap): {
+  model: string;
+  systemPrompt?: string;
+  userMessage: string;
+  images: string[];
+} {
+  const data = node.data ?? {};
+
+  const requestedModel = String(data.model ?? 'gemini-2.5-flash').toLowerCase();
+  if (!ALLOWED_MODELS.has(requestedModel)) {
+    throw new AppError('invalid_input', `Model "${requestedModel}" is not allowed. Use Gemini 2.5 Flash or Gemini 2.5 Pro.`, 400, {
+      field: 'model',
+      allowed: [...ALLOWED_MODELS],
+    });
   }
 
-  const run = await prisma.workflowRun.create({
-    data: {
-      workflowId: workflow.id,
-      status: 'running',
-      scope: body.scope,
+  const userMessageRaw = composeTextInput(inputs.user_message ?? data.userMessage ?? '', 'User Input');
+  if (!userMessageRaw) {
+    throw new AppError('invalid_input', 'LLM node requires a user message.', 400, {
+      nodeId: node.id,
+      field: 'user_message',
+    });
+  }
+
+  const systemPromptRaw = composeTextInput(inputs.system_prompt ?? data.systemPrompt ?? '', 'System Input');
+
+  let images: string[] = [];
+  if (Array.isArray(inputs.images)) {
+    images = inputs.images.map(String).filter(Boolean);
+  } else if (inputs.images) {
+    images = [String(inputs.images)];
+  } else {
+    images = String(data.imagesInput ?? '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return {
+    model: requestedModel,
+    systemPrompt: systemPromptRaw || undefined,
+    userMessage: userMessageRaw,
+    images,
+  };
+}
+
+function getIncludedGraph(body: RunBody): { nodes: Node[]; edges: Edge[] } {
+  const enabledNodes = body.nodes.filter((node) => !isNodeDisabled(node));
+  const enabledNodeIds = new Set(enabledNodes.map((node) => node.id));
+  const enabledEdges = body.edges.filter((edge) => enabledNodeIds.has(edge.source) && enabledNodeIds.has(edge.target));
+
+  if (body.selectedNodeIds?.length) {
+    const selected = new Set(body.selectedNodeIds.filter((nodeId) => enabledNodeIds.has(nodeId)));
+    return {
+      nodes: enabledNodes.filter((node) => selected.has(node.id)),
+      edges: enabledEdges.filter((edge) => selected.has(edge.source) && selected.has(edge.target)),
+    };
+  }
+
+  if (enabledEdges.length === 0) {
+    return { nodes: enabledNodes, edges: enabledEdges };
+  }
+
+  const connectedNodeIds = new Set<string>();
+  for (const edge of enabledEdges) {
+    connectedNodeIds.add(edge.source);
+    connectedNodeIds.add(edge.target);
+  }
+
+  return {
+    nodes: enabledNodes.filter((node) => connectedNodeIds.has(node.id)),
+    edges: enabledEdges,
+  };
+}
+
+async function getPersistedOutputs(workflowId: string): Promise<Record<string, NodeIOMap>> {
+  const executions = await prisma.nodeExecution.findMany({
+    where: {
+      status: 'success',
+      run: {
+        workflowId,
+      },
     },
+    orderBy: { updatedAt: 'desc' },
+    take: 1000,
   });
 
-  const executionByNodeId = new Map<string, string>();
-  const nodeTypeById = new Map(body.nodes.map((node) => [node.id, node.type ?? 'unknown']));
-  const nodeRuns: NodeRunRecord[] = [];
-  const startedAt = Date.now();
+  const map: Record<string, NodeIOMap> = {};
+  for (const execution of executions) {
+    if (map[execution.nodeId]) continue;
+    const outputs = execution.outputs;
+    if (outputs && typeof outputs === 'object' && !Array.isArray(outputs)) {
+      map[execution.nodeId] = outputs as NodeIOMap;
+    }
+  }
+  return map;
+}
+
+function ensureDependencies(_body: RunBody, includedNodes: Node[]): DependencyState {
+  const hasTriggerNodes = includedNodes.some((node) => node.type === 'llm' || node.type === 'crop' || node.type === 'extract');
+  const hasLlmNodes = includedNodes.some((node) => node.type === 'llm');
+
+  const dependencies: DependencyState = {
+    database: 'ok',
+    trigger: hasTriggerNodes ? 'ok' : 'not_required',
+    gemini: hasLlmNodes ? 'ok' : 'not_required',
+  };
+
+  if (hasTriggerNodes && !process.env.TRIGGER_SECRET_KEY && (!ALLOW_LOCAL_FALLBACK || FORCE_TRIGGER_ONLY)) {
+    dependencies.trigger = 'unavailable';
+    throw new AppError('dependency_unavailable', 'Trigger.dev is not configured. Missing TRIGGER_SECRET_KEY.', 503, {
+      dependencies,
+    });
+  }
+
+  if (hasLlmNodes && !process.env.GEMINI_API_KEY) {
+    dependencies.gemini = 'unavailable';
+    throw new AppError('dependency_unavailable', 'Gemini API key is missing. Configure GEMINI_API_KEY.', 503, {
+      dependencies,
+    });
+  }
+
+  return dependencies;
+}
+
+function isRecoverableTriggerError(error: unknown): boolean {
+  if (!(error instanceof AppError)) return false;
+  if (error.code === 'dependency_unavailable') return true;
+  if (error.code === 'task_failed') return true;
+  return false;
+}
+
+function createErrorResponse(error: unknown, dependencies?: Partial<DependencyState>) {
+  const appError = toAppError(error, 'Workflow run failed');
+  const payload = {
+    error: {
+      code: appError.code,
+      message: appError.message,
+      details: appError.details,
+    },
+    dependencies: {
+      database: appError.code === 'dependency_unavailable' && appError.details?.dependency === 'database' ? 'unavailable' : 'ok',
+      trigger: dependencies?.trigger ?? 'ok',
+      gemini: dependencies?.gemini ?? 'ok',
+    },
+  };
+
+  return NextResponse.json(payload, { status: appError.status });
+}
+
+async function triggerTaskAndPoll<TOutput = unknown>(taskId: string, payload: unknown): Promise<TOutput> {
+  if (!process.env.TRIGGER_SECRET_KEY) {
+    throw new AppError('dependency_unavailable', `Trigger.dev is not configured for ${taskId}.`, 503, {
+      task: taskId,
+      hint: 'Set TRIGGER_SECRET_KEY or enable local fallback.',
+    });
+  }
+
+  const handle = await tasks.trigger(taskId, payload);
+  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 5000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1000) {
+    throw new AppError('invalid_input', 'TRIGGER_POLL_TIMEOUT_MS must be a number >= 1000.', 500, {
+      value: process.env.TRIGGER_POLL_TIMEOUT_MS,
+    });
+  }
+  const pollPromise = runs.poll(handle.id, { pollIntervalMs: 1000 });
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(
+        new AppError(
+          'dependency_unavailable',
+          `Timed out waiting for ${taskId}. Trigger worker may be unavailable.`,
+          503,
+          {
+            task: taskId,
+            runId: handle.id,
+            timeoutMs,
+            hint: 'Start the Trigger worker with: npx trigger.dev@latest dev',
+          }
+        )
+      );
+    }, timeoutMs);
+  });
+
+  const run = await Promise.race([pollPromise, timeoutPromise]);
+
+  if (!run.isSuccess) {
+    throw new AppError('task_failed', `${taskId} failed in Trigger.dev.`, 502, {
+      task: taskId,
+      runId: handle.id,
+      status: run.status,
+      error: run.error,
+    });
+  }
+
+  return run.output as TOutput;
+}
+
+export async function POST(request: NextRequest) {
+  let dependencies: Partial<DependencyState> = {
+    database: 'ok',
+    trigger: 'ok',
+    gemini: 'ok',
+  };
 
   try {
-    const executeNode = async (node: Node, inputs: NodeIOMap): Promise<NodeIOMap> => {
-      if (node.type === 'llm') {
-        const data = node.data ?? {};
-        const payload = {
-          model: String(data.model ?? 'gemini-2.5-flash'),
-          systemPrompt: String(inputs.system_prompt ?? data.systemPrompt ?? ''),
-          userMessage: String(inputs.user_message ?? data.userMessage ?? ''),
-          images: Array.isArray(inputs.images)
-            ? inputs.images.map(String)
-            : inputs.images
-              ? [String(inputs.images)]
-              : String(data.imagesInput ?? '')
-                  .split(',')
-                  .map((item) => item.trim())
-                  .filter(Boolean),
-        };
+    const { userId } = await auth();
+    if (!userId) {
+      throw new AppError('unauthorized', 'Unauthorized', 401);
+    }
 
+    const body = (await request.json()) as RunBody;
+    if (!body.workflowId || !Array.isArray(body.nodes) || !Array.isArray(body.edges) || !body.scope) {
+      throw new AppError('bad_request', 'Invalid run payload.', 400);
+    }
+
+    await prisma.$queryRaw`SELECT 1`;
+
+    const { user } = await ensureUserAndWorkflow(userId);
+
+    const workflow = await prisma.workflow.findFirst({
+      where: { id: body.workflowId, userId: user.id },
+    });
+    if (!workflow) {
+      throw new AppError('not_found', 'Workflow not found', 404);
+    }
+
+    const includedGraph = getIncludedGraph(body);
+    if (includedGraph.nodes.length === 0) {
+      throw new AppError('invalid_input', 'No executable nodes found for this run.', 400);
+    }
+
+    dependencies = ensureDependencies(body, includedGraph.nodes);
+
+    const run = await prisma.workflowRun.create({
+      data: {
+        workflowId: workflow.id,
+        status: 'running',
+        scope: body.scope,
+      },
+    });
+
+    const persistedOutputsByNodeId = body.scope === 'full' ? {} : await getPersistedOutputs(workflow.id);
+
+    const executionByRecordId = new Map<string, string>();
+    const nodeTypeById = new Map(body.nodes.map((node) => [node.id, node.type ?? 'unknown']));
+    const nodeRuns: NodeRunRecord[] = [];
+    const startedAt = Date.now();
+
+    const fallbackNodeIds = new Set<string>();
+    const executeNode = async (node: Node, inputs: NodeIOMap): Promise<NodeIOMap> => {
+      const runWithFallback = async <T>(taskName: string, fn: () => Promise<T>): Promise<T> => {
         try {
-          const result = await tasks.triggerAndWait('run-llm', payload);
-          if (result.ok) {
-            return { output: (result.output as { response?: string })?.response ?? '' };
+          return await fn();
+        } catch (error) {
+          if (ALLOW_LOCAL_FALLBACK && !FORCE_TRIGGER_ONLY && isRecoverableTriggerError(error)) {
+            dependencies.trigger = 'unavailable';
+            fallbackNodeIds.add(node.id);
+            return await executeNodeLocal(node, inputs) as T;
           }
-        } catch {
-          // Fall back to local executor in dev/prototype environments.
+          throw error;
         }
-        return executeNodeLocal(node, inputs);
+      };
+
+      if (node.type === 'llm') {
+        return runWithFallback('run-llm', async () => {
+          const payload = buildLlmPayload(node, inputs);
+          const result = await triggerTaskAndPoll<{ response?: string }>('run-llm', payload);
+          return { output: result?.response ?? '' };
+        });
       }
 
       if (node.type === 'crop') {
-        const data = node.data ?? {};
-        const imageUrl = String(inputs.image_url ?? data.imageUrl ?? '');
-        const payload = {
-          imageUrl,
-          x: Number(inputs.x_percent ?? data.x_percent ?? 0),
-          y: Number(inputs.y_percent ?? data.y_percent ?? 0),
-          w: Number(inputs.width_percent ?? data.width_percent ?? 100),
-          h: Number(inputs.height_percent ?? data.height_percent ?? 100),
-        };
-
-        try {
-          const result = await tasks.triggerAndWait('crop-image', payload);
-          if (result.ok) {
-            const output = (result.output as { croppedUrl?: string })?.croppedUrl;
-            return { output: output ?? '' };
+        return runWithFallback('crop-image', async () => {
+          const data = node.data ?? {};
+          const imageUrl = String(inputs.image_url ?? data.imageUrl ?? '');
+          if (!imageUrl) {
+            throw new AppError('invalid_input', 'Crop node requires image_url.', 400, { nodeId: node.id });
           }
-        } catch {
-          // Fall back to local executor in dev/prototype environments.
-        }
-        return executeNodeLocal(node, inputs);
+
+          const payload = {
+            imageUrl,
+            x: validatePercent('x_percent', parseNumberInput(inputs.x_percent ?? data.x_percent, 0)),
+            y: validatePercent('y_percent', parseNumberInput(inputs.y_percent ?? data.y_percent, 0)),
+            w: validatePercent('width_percent', parseNumberInput(inputs.width_percent ?? data.width_percent, 100)),
+            h: validatePercent('height_percent', parseNumberInput(inputs.height_percent ?? data.height_percent, 100)),
+          };
+
+          const result = await triggerTaskAndPoll<{ croppedUrl?: string }>('crop-image', payload);
+          const output = result?.croppedUrl;
+          if (!output) {
+            throw new AppError('task_failed', 'Crop task returned no output URL.', 502, { nodeId: node.id });
+          }
+
+          return { output };
+        });
       }
 
       if (node.type === 'extract') {
-        const data = node.data ?? {};
-        const payload = {
-          videoUrl: String(inputs.video_url ?? data.videoUrl ?? ''),
-          timestamp: String(inputs.timestamp ?? data.timestamp ?? '0'),
-        };
-        try {
-          const result = await tasks.triggerAndWait('extract-frame', payload);
-          if (result.ok) {
-            const output = (result.output as { frameUrl?: string })?.frameUrl;
-            return { output: output ?? '' };
+        return runWithFallback('extract-frame', async () => {
+          const data = node.data ?? {};
+          const videoUrl = String(inputs.video_url ?? data.videoUrl ?? '');
+          if (!videoUrl) {
+            throw new AppError('invalid_input', 'Extract node requires video_url.', 400, { nodeId: node.id });
           }
-        } catch {
-          // Fall back to local executor in dev/prototype environments.
-        }
-        return executeNodeLocal(node, inputs);
+
+          const payload = {
+            videoUrl,
+            timestamp: validateTimestamp(String(inputs.timestamp ?? data.timestamp ?? '0')),
+          };
+
+          const result = await triggerTaskAndPoll<{ frameUrl?: string }>('extract-frame', payload);
+          const output = result?.frameUrl;
+          if (!output) {
+            throw new AppError('task_failed', 'Extract frame task returned no frame URL.', 502, { nodeId: node.id });
+          }
+
+          return { output };
+        });
       }
 
       return executeNodeLocal(node, inputs);
     };
 
-    const result = await executeWorkflow({
-      nodes: body.nodes,
-      edges: body.edges,
-      selectedNodeIds: body.selectedNodeIds,
-      executeNode,
-      onNodeStart: async (nodeId, inputs) => {
-        const execution = await prisma.nodeExecution.create({
-          data: {
-            runId: run.id,
-            nodeId,
-            nodeType: nodeTypeById.get(nodeId) ?? 'unknown',
-            status: 'running',
-            inputs: (inputs ?? {}) as Prisma.InputJsonValue,
-          },
-        });
-        executionByNodeId.set(nodeId, execution.id);
-      },
-      onNodeFinish: async (record) => {
-        nodeRuns.push(record);
-        const executionId = executionByNodeId.get(record.nodeId);
-        if (!executionId) return;
-        await prisma.nodeExecution.update({
-          where: { id: executionId },
-          data: {
-            nodeType: record.type,
-            status: record.status === 'error' ? 'failed' : 'success',
-            outputs: (record.outputs ?? {}) as Prisma.InputJsonValue,
-            error: record.error ?? null,
-            duration: new Date(record.finishedAt).getTime() - new Date(record.startedAt).getTime(),
-          },
-        });
-      },
-    });
+    try {
+      const result = await executeWorkflow({
+        nodes: body.nodes,
+        edges: body.edges,
+        selectedNodeIds: body.selectedNodeIds,
+        persistedOutputsByNodeId,
+        executeNode,
+        onNodeStart: async (nodeId, inputs) => {
+          const execution = await prisma.nodeExecution.create({
+            data: {
+              runId: run.id,
+              nodeId,
+              nodeType: nodeTypeById.get(nodeId) ?? 'unknown',
+              status: 'running',
+              inputs: (inputs ?? {}) as Prisma.InputJsonValue,
+            },
+          });
+          executionByRecordId.set(nodeId, execution.id);
+        },
+        onNodeFinish: async (record) => {
+          nodeRuns.push(record);
+          const executionId = executionByRecordId.get(record.nodeId);
+          if (!executionId) return;
 
-    const duration = Date.now() - startedAt;
-    await prisma.workflowRun.update({
-      where: { id: run.id },
-      data: {
-        status: 'success',
-        duration,
-      },
-    });
+          await prisma.nodeExecution.update({
+            where: { id: executionId },
+            data: {
+              nodeType: record.type,
+              status: record.status === 'error' ? 'failed' : 'success',
+              outputs: (record.outputs ?? {}) as Prisma.InputJsonValue,
+              error: record.error ?? null,
+              duration: new Date(record.finishedAt).getTime() - new Date(record.startedAt).getTime(),
+            },
+          });
+        },
+      });
 
-    return NextResponse.json({
-      run: {
-        id: run.id,
-        status: 'success',
-        scope: body.scope,
-        duration,
-        startedAt: run.createdAt.toISOString(),
-        finishedAt: new Date().toISOString(),
-        nodeRuns,
-        executionPath: result.executionPath,
-      },
-    });
+      const duration = Date.now() - startedAt;
+      await prisma.workflowRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'success',
+          duration,
+        },
+      });
+
+      return NextResponse.json({
+        run: {
+          id: run.id,
+          status: 'success',
+          scope: body.scope,
+          duration,
+          startedAt: run.createdAt.toISOString(),
+          finishedAt: new Date().toISOString(),
+          nodeRuns,
+          executionPath: result.executionPath,
+        },
+        dependencies,
+        fallback: {
+          used: fallbackNodeIds.size > 0,
+          nodeIds: [...fallbackNodeIds],
+          mode: ALLOW_LOCAL_FALLBACK && !FORCE_TRIGGER_ONLY ? 'local-executor' : 'none',
+        },
+      });
+    } catch (error) {
+      const duration = Date.now() - startedAt;
+      const hasSuccess = nodeRuns.some((entry) => entry.status === 'success');
+      await prisma.workflowRun.update({
+        where: { id: run.id },
+        data: {
+          status: hasSuccess ? 'partial' : 'failed',
+          duration,
+        },
+      });
+
+      return createErrorResponse(error, dependencies);
+    }
   } catch (error) {
-    const duration = Date.now() - startedAt;
-    const hasSuccess = nodeRuns.some((runEntry) => runEntry.status === 'success');
-    await prisma.workflowRun.update({
-      where: { id: run.id },
-      data: {
-        status: hasSuccess ? 'partial' : 'failed',
-        duration,
-      },
-    });
-
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'Workflow run failed',
-      },
-      { status: 500 }
-    );
+    return createErrorResponse(error, dependencies);
   }
 }

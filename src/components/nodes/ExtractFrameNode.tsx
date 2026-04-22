@@ -13,7 +13,7 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
   return (
     <BaseNode
       id={id}
-      title="Extract Frame"
+      title={String(data.label || 'Extract Frame')}
       icon={<ImageMinus size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
@@ -27,6 +27,12 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
       ]}
     >
       <div className="flex flex-col gap-2">
+        {Boolean(data.output) && (
+          <div className="relative w-full h-32 rounded-md overflow-hidden bg-neutral-100 border border-neutral-200 dark:bg-[#1A1A1A] dark:border-[#333]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={String(data.output)} alt="Extracted Frame" className="w-full h-full object-cover" />
+          </div>
+        )}
         <label className="text-xs text-gray-400 font-medium">Timestamp</label>
         
         <input 

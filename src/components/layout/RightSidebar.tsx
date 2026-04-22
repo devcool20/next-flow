@@ -3,6 +3,7 @@ import { clsx } from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useWorkflowStore } from '@/lib/store';
 import { Filter, History, ImageIcon, PlayCircle } from 'lucide-react';
+import type { NodeRunRecord } from '@/lib/workflow-engine';
 
 type RightSidebarMode = 'assets' | 'versions';
 type AssetKind = 'image' | 'video' | 'file';
@@ -103,7 +104,8 @@ function renderFormattedValue(value: string) {
 
 import type { ThemeMode } from './Shell';
 
-export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
+export default function RightSidebar({ isOpen, mode, theme: _theme }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
+  void _theme;
   const nodes = useWorkflowStore((state) => state.nodes);
   const history = useWorkflowStore((state) => state.history);
   const isRunning = useWorkflowStore((state) => state.isRunning);
@@ -117,14 +119,18 @@ export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean;
   // Clear highlights when sidebar is closed
   useEffect(() => {
     if (!isOpen) {
-      // Strip highlighted flag from all nodes and clear activeRunId
+      // Use the store's hook to get the state and update it
       const { nodes: currentNodes } = useWorkflowStore.getState();
-      const cleared = currentNodes.map((n) => ({
-        ...n,
-        data: { ...n.data, highlighted: false },
-        selected: false,
-      }));
-      useWorkflowStore.setState({ nodes: cleared, activeRunId: null });
+      const hasHighlighted = currentNodes.some(n => n.data.highlighted || n.selected);
+      
+      if (hasHighlighted) {
+        const cleared = currentNodes.map((n) => ({
+          ...n,
+          data: { ...n.data, highlighted: false },
+          selected: false,
+        }));
+        useWorkflowStore.setState({ nodes: cleared, activeRunId: null });
+      }
     }
   }, [isOpen]);
 
@@ -221,7 +227,7 @@ export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean;
   );
 }
 
-function NodeRunItem({ nodeRun, isSelected }: { nodeRun: any; isSelected: boolean | undefined }) {
+function NodeRunItem({ nodeRun, isSelected }: { nodeRun: NodeRunRecord; isSelected: boolean | undefined }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const duration = ((new Date(nodeRun.finishedAt).getTime() - new Date(nodeRun.startedAt).getTime()) / 1000).toFixed(1);
 
@@ -268,16 +274,18 @@ function NodeRunItem({ nodeRun, isSelected }: { nodeRun: any; isSelected: boolea
                 <span className="shrink-0 font-semibold text-[#8592a8]">Output:</span>
                 <span className="truncate opacity-80 italic">
                   {renderFormattedValue(
-                    typeof nodeRun.outputs.output === 'string'
-                      ? `"${nodeRun.outputs.output.slice(0, 60)}${nodeRun.outputs.output.length > 60 ? '...' : ''}"`
-                      : JSON.stringify(nodeRun.outputs).slice(0, 60)
+                    (() => {
+                      const out = nodeRun.outputs;
+                      const val = typeof out.output === 'string' ? out.output : (out.image_url || out.frame_url || out.video_url || JSON.stringify(out));
+                      return String(val).length > 80 ? String(val).slice(0, 80) + '...' : String(val);
+                    })()
                   )}
                 </span>
               </div>
             ) : (
               <div className="flex gap-1 text-[11px] text-red-400/80">
                 <span className="shrink-0 font-semibold">Error:</span>
-                <span className="truncate italic">"{nodeRun.error || 'Unknown error'}"</span>
+                <span className="truncate italic">&quot;{nodeRun.error || 'Unknown error'}&quot;</span>
               </div>
             )
           ) : (
@@ -364,6 +372,21 @@ function VersionHistoryView({
   runSelectedWorkflow: () => Promise<void>;
   selectHistoryRun: (runId: string) => void;
 }) {
+  const restoreRunVersion = useWorkflowStore((state) => state.restoreRunVersion);
+  const [restoringRunId, setRestoringRunId] = useState<string | null>(null);
+
+  const handleRunClick = (runId: string) => {
+    selectHistoryRun(runId);
+    setRestoringRunId(runId);
+  };
+
+  const confirmRestore = () => {
+    if (restoringRunId) {
+      restoreRunVersion(restoringRunId);
+      setRestoringRunId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
@@ -408,7 +431,7 @@ function VersionHistoryView({
             ) : (
               activeRun.nodeRuns.map((nodeRun) => (
                 <NodeRunItem
-                  key={`${activeRun.id}-${nodeRun.nodeId}`}
+                  key={nodeRun.executionId}
                   nodeRun={nodeRun}
                   isSelected={nodes.find((n) => n.id === nodeRun.nodeId)?.selected}
                 />
@@ -425,7 +448,7 @@ function VersionHistoryView({
             {history.map((run) => (
               <button
                 key={run.id}
-                onClick={() => selectHistoryRun(run.id)}
+                onClick={() => handleRunClick(run.id)}
                 className={clsx(
                   'w-full rounded-xl border p-3 text-left transition-colors',
                   run.id === activeRunId ? 'border-[#4b9cff] bg-[#1a2433]' : 'border-[#2a2f37] bg-[#161a1f] hover:bg-[#1d222a]'
@@ -447,6 +470,32 @@ function VersionHistoryView({
                 </p>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Restore Confirmation Modal */}
+      {restoringRunId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#2a2f37] bg-[#141920] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold text-white mb-2">Restore Version?</h3>
+            <p className="text-sm text-[#8592a8] mb-6">
+              Do you want to replace the current screen with this version of the workflow? This will restore all node outputs and statuses from that run.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRestoringRunId(null)}
+                className="flex-1 rounded-xl bg-[#242a33] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#2d3540]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRestore}
+                className="flex-1 rounded-xl bg-[#4b9cff] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3d8be5]"
+              >
+                Restore
+              </button>
+            </div>
           </div>
         </div>
       )}

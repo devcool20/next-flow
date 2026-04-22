@@ -1,6 +1,6 @@
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react';
 import { clsx } from 'clsx';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { useWorkflowStore } from '@/lib/store';
 
 interface BaseNodeProps {
@@ -30,10 +30,13 @@ export function BaseNode({
   className,
   showLabels = false,
 }: BaseNodeProps) {
-  const duplicateSelectedNodes = useWorkflowStore((state) => state.duplicateSelectedNodes);
-  const deleteSelectedNodes = useWorkflowStore((state) => state.deleteSelectedNodes);
+  const updateNodeInternals = useUpdateNodeInternals();
   const nodeData = useWorkflowStore((state) => state.nodes.find((n) => n.id === id)?.data);
-  const displayTitle = (nodeData?.title as string) || title;
+  const displayTitle = (nodeData?.label as string) || (nodeData?.title as string) || title;
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, inputs, outputs, updateNodeInternals]);
 
   return (
     <>

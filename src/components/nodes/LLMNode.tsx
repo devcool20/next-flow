@@ -1,9 +1,8 @@
-import { Brain, Copy, ChevronDown, ChevronRight, Pencil, Image as ImageIcon } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Pencil, Image as ImageIcon } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
 import ReactMarkdown from 'react-markdown';
 import { memo, useState } from 'react';
-import { Tooltip } from '../shared/Tooltip';
 
 type NodeData = Record<string, unknown>;
 
@@ -22,15 +21,16 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
     { id: 'images', label: 'image(s)', className: 'handle-blue', top: '385px' }
   ];
 
-  // System prompt handle is only active if the drawer is open
-  if (isSettingsOpen) {
-    inputs.push({ id: 'system_prompt', label: 'system', className: '', top: '468px' });
+  // System prompt handle is visible if drawer is open OR if it is linked
+  if (isSettingsOpen || systemLinked) {
+    // If settings are closed but linked, we show it at a default position or same position
+    inputs.push({ id: 'system_prompt', label: 'system', className: '', top: isSettingsOpen ? '468px' : '425px' });
   }
 
   return (
     <BaseNode
       id={id}
-      title="Node Name"
+      title={String(data.label || 'LLM')}
       icon={<Brain size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
@@ -45,7 +45,9 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
         {/* Output Area - Now at the top */}
         <div className="w-full bg-neutral-100 dark:bg-[#1A1A1A] rounded-md min-h-[220px] p-4 text-[15px] font-normal text-neutral-800 dark:text-white mb-2 custom-scrollbar overflow-y-auto">
           {data.output ? (
-            <ReactMarkdown className="prose dark:prose-invert max-w-none">{String(data.output)}</ReactMarkdown>
+            <div className="prose dark:prose-invert max-w-none">
+              <ReactMarkdown>{String(data.output).replace(/\\n/g, '\n')}</ReactMarkdown>
+            </div>
           ) : (
              <span className="text-neutral-400 dark:text-white/20"></span>
           )}
@@ -97,14 +99,14 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
             <div className="flex flex-col gap-3 pl-1 animate-in slide-in-from-top-1 fade-in">
               <div className="flex items-center gap-3">
                  <span className="text-[13px] text-neutral-500 dark:text-white/40 w-[45px]">Model</span>
-                 <select
+                  <select
                     className="flex-1 bg-neutral-100 dark:bg-[#111111] rounded-md p-1.5 px-3 text-[13px] font-medium text-neutral-800 dark:text-white focus:outline-none transition-colors appearance-none"
                     value={(data.model as string) || 'gemini-2.5-flash'}
                     onChange={(e) => updateNodeData(id, { model: e.target.value })}
-                 >
+                  >
                     <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                 </select>
+                  </select>
               </div>
               
               <div className={systemLinked ? "opacity-50 pointer-events-none flex flex-col gap-1" : "flex flex-col gap-1"}>

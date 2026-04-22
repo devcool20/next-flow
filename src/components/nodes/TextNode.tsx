@@ -1,7 +1,7 @@
 import { Copy, Pencil } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
-import { memo, useState, useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { Tooltip } from '../shared/Tooltip';
 
 type NodeData = Record<string, unknown>;

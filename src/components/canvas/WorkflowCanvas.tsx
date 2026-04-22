@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -24,6 +24,15 @@ import { Pencil, Copy, CopyPlus, Edit2, EyeOff, Trash } from 'lucide-react';
 
 
 type CutLine = { x1: number; y1: number; x2: number; y2: number };
+const NODE_TYPES = {
+  text: TextNode,
+  image: ImageUploadNode,
+  video: VideoUploadNode,
+  crop: CropNode,
+  extract: ExtractFrameNode,
+  llm: LLMNode,
+} as const;
+
 const CUT_CURSOR =
   'url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2222%22 height=%2222%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23ef4444%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%226%22 cy=%226%22 r=%223%22/%3E%3Ccircle cx=%226%22 cy=%2218%22 r=%223%22/%3E%3Cpath d=%22M20 4L8.1 15.9%22/%3E%3Cpath d=%22M14.5 14.5L20 20%22/%3E%3C/svg%3E") 6 4, crosshair';
 
@@ -61,15 +70,6 @@ function WorkflowCanvasBody({
   const activeTextNode = nodes.find(n => n.id === editingTextNodeId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   
-  const nodeTypes = useMemo(() => ({
-    text: TextNode,
-    image: ImageUploadNode,
-    video: VideoUploadNode,
-    crop: CropNode,
-    extract: ExtractFrameNode,
-    llm: LLMNode,
-  }), []);
-
   const [contextMenu, setContextMenu] = useState<{ id: string; top: number; left: number } | null>(null);
 
   useEffect(() => {
@@ -263,7 +263,7 @@ function WorkflowCanvasBody({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        nodeTypes={nodeTypes}
+        nodeTypes={NODE_TYPES}
         onDragOver={onDragOver}
         onDrop={onDrop}
         panOnDrag={panOnDrag}
@@ -306,9 +306,15 @@ function WorkflowCanvasBody({
           showInteractive={false} 
         />
         <MiniMap
-          className="bg-[#111] border border-[#222] rounded-lg overflow-hidden !bottom-16"
-          nodeColor="#333"
-          maskColor="rgba(0, 0, 0, 0.55)"
+          className="!bg-[#1a1a1a]/90 !border !border-white/10 !rounded-xl !bottom-3 !right-3 shadow-2xl overflow-hidden"
+          nodeColor={(n) => {
+            if (n.type === 'llm') return '#FFC700';
+            if (n.type === 'image' || n.type === 'crop' || n.type === 'extract') return '#4b9cff';
+            return '#333';
+          }}
+          maskColor="rgba(0, 0, 0, 0.7)"
+          zoomable
+          pannable
         />
       </ReactFlow>
 

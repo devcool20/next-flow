@@ -361,15 +361,13 @@ function MenuItem({
 }
 
 function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
-  const [workspaceName, setWorkspaceName] = useState('Untitled');
+  const [workspaceName, setWorkspaceName] = useState(() => {
+    if (typeof window === 'undefined') return 'Untitled';
+    return window.localStorage.getItem('nextflow-workspace-name') || 'Untitled';
+  });
   const [menuOpen, setMenuOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    const savedName = window.localStorage.getItem('nextflow-workspace-name');
-    if (savedName) setWorkspaceName(savedName);
-  }, []);
 
   useEffect(() => {
     window.localStorage.setItem('nextflow-workspace-name', workspaceName);
