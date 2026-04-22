@@ -26,7 +26,11 @@ export const runLLMTask = task({
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       // Construct the model, applying system instructions if provided
-      const modelIdentifier = payload.model === 'gemini-1.5-pro' ? 'gemini-1.5-pro' : 'gemini-1.5-flash';
+      let modelIdentifier = payload.model.includes('-pro') ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+      
+      // Explicitly map legacy names if they come in literally
+      if (payload.model === 'gemini-1.5-flash') modelIdentifier = 'gemini-2.5-flash';
+      if (payload.model === 'gemini-1.5-pro') modelIdentifier = 'gemini-2.5-pro';
       
       const model = genAI.getGenerativeModel({ 
           model: modelIdentifier,

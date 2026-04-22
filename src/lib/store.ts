@@ -179,7 +179,7 @@ function buildNode(type: string, position: { x: number; y: number }): Node {
     return { id, type, position, data: { label: title, timestamp: '0' } };
   }
   if (type === 'llm') {
-    return { id, type, position, data: { label: title, model: 'gemini-1.5-flash' } };
+    return { id, type, position, data: { label: title, model: 'gemini-2.5-flash' } };
   }
   return { id, type, position, data: { label: title } };
 }
@@ -285,10 +285,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (createsCycle(state.nodes, state.edges, candidate)) {
       return;
     }
-    const nextEdges = addEdge(
-      normalizeEdgeVisual({ ...connection }),
-      state.edges
-    );
+    const nextEdges = addEdge(candidate, state.edges);
     set({
       edges: nextEdges,
       graphPast: nextPastStack(state.graphPast, state.nodes, state.edges),
@@ -397,6 +394,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     } catch (error) {
       set({
         isRunning: false,
+        nodes: get().nodes.map((node) => ({
+          ...node,
+          data: {
+            ...node.data,
+            status: node.data?.status === 'running' ? 'error' : node.data?.status,
+          },
+        })),
         history: [
           {
             id: `run_${Date.now()}`,
@@ -461,6 +465,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     } catch (error) {
       set({
         isRunning: false,
+        nodes: get().nodes.map((node) => ({
+          ...node,
+          data: {
+            ...node.data,
+            status: node.data?.status === 'running' ? 'error' : node.data?.status,
+          },
+        })),
         history: [
           {
             id: `run_${Date.now()}`,

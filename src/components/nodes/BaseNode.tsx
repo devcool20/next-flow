@@ -12,6 +12,7 @@ interface BaseNodeProps {
   inputs?: { id: string; label?: string }[];
   outputs?: { id: string; label?: string }[];
   selected?: boolean;
+  className?: string;
 }
 
 export function BaseNode({
@@ -23,6 +24,7 @@ export function BaseNode({
   inputs = [],
   outputs = [],
   selected = false,
+  className,
 }: BaseNodeProps) {
   const duplicateSelectedNodes = useWorkflowStore((state) => state.duplicateSelectedNodes);
   const deleteSelectedNodes = useWorkflowStore((state) => state.deleteSelectedNodes);
@@ -34,7 +36,8 @@ export function BaseNode({
       <div
       data-node-id={id}
       className={clsx(
-        "rounded-xl border border-neutral-200 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-suisse dark:border-white/10 dark:bg-[#161616] dark:shadow-none transition-all duration-300 relative w-[246px]",
+        "rounded-xl border border-neutral-200 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-suisse dark:border-white/10 dark:bg-[#161616] dark:shadow-none transition-all duration-300 relative",
+        className || "w-[246px]",
         selected
           ? "border-[#eab308] ring-1 ring-[#eab308] shadow-[0_0_0_1px_rgba(234,179,8,1),0_0_22px_-8px_rgba(234,179,8,0.4)] dark:border-[#FFC700] dark:ring-[#FFC700] dark:shadow-[0_0_0_1px_rgba(255,199,0,1),0_0_22px_-8px_rgba(255,199,0,0.4)]"
           : "hover:border-neutral-300 dark:hover:border-white/20",

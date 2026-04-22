@@ -63,7 +63,9 @@ function formatRelativeTime(dateIso: string) {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
-export default function RightSidebar({ isOpen, mode }: { isOpen: boolean; mode: RightSidebarMode }) {
+import type { ThemeMode } from './Shell';
+
+export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
   const nodes = useWorkflowStore((state) => state.nodes);
   const history = useWorkflowStore((state) => state.history);
   const isRunning = useWorkflowStore((state) => state.isRunning);

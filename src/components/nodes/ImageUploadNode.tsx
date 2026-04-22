@@ -13,15 +13,16 @@ export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selecte
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // TODO: In a real environment, trigger Transloadit upload here
-    // For now we create a local object URL to display the preview immediately
-    const previewUrl = URL.createObjectURL(file);
-    
-    // Simulate upload delay
-    updateNodeData(id, { status: 'running' });
-    setTimeout(() => {
-      updateNodeData(id, { imageUrl: previewUrl, status: 'success' });
-    }, 1500);
+    // For the prototype, we convert the file to a base64 Data URL so it can be fetched by the server
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      updateNodeData(id, { status: 'running' });
+      setTimeout(() => {
+        updateNodeData(id, { imageUrl: dataUrl, status: 'success' });
+      }, 1000);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (

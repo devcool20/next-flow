@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -21,14 +21,6 @@ import { ExtractFrameNode } from '../nodes/ExtractFrameNode';
 import { LLMNode } from '../nodes/LLMNode';
 import { Pencil, Copy, CopyPlus, Edit2, EyeOff, Trash } from 'lucide-react';
 
-const nodeTypes = {
-  text: TextNode,
-  image: ImageUploadNode,
-  video: VideoUploadNode,
-  crop: CropNode,
-  extract: ExtractFrameNode,
-  llm: LLMNode,
-};
 
 type CutLine = { x1: number; y1: number; x2: number; y2: number };
 const CUT_CURSOR =
@@ -67,6 +59,15 @@ function WorkflowCanvasBody({
   } = useWorkflowStore();
   const activeTextNode = nodes.find(n => n.id === editingTextNodeId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  
+  const nodeTypes = useMemo(() => ({
+    text: TextNode,
+    image: ImageUploadNode,
+    video: VideoUploadNode,
+    crop: CropNode,
+    extract: ExtractFrameNode,
+    llm: LLMNode,
+  }), []);
 
   const [contextMenu, setContextMenu] = useState<{ id: string; top: number; left: number } | null>(null);
 

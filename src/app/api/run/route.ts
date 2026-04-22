@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       if (node.type === 'llm') {
         const data = node.data ?? {};
         const payload = {
-          model: String(data.model ?? 'gemini-1.5-flash'),
+          model: String(data.model ?? 'gemini-2.5-flash'),
           systemPrompt: String(inputs.system_prompt ?? data.systemPrompt ?? ''),
           userMessage: String(inputs.user_message ?? data.userMessage ?? ''),
           images: Array.isArray(inputs.images)
