@@ -9,11 +9,12 @@ interface BaseNodeProps {
   icon: ReactNode;
   children: ReactNode;
   status?: 'idle' | 'running' | 'success' | 'error';
-  inputs?: { id: string; label?: string }[];
-  outputs?: { id: string; label?: string }[];
+  inputs?: { id: string; label?: string; className?: string; top?: number | string }[];
+  outputs?: { id: string; label?: string; className?: string; top?: number | string }[];
   selected?: boolean;
   highlighted?: boolean;
   className?: string;
+  showLabels?: boolean;
 }
 
 export function BaseNode({
@@ -27,6 +28,7 @@ export function BaseNode({
   selected = false,
   highlighted = false,
   className,
+  showLabels = false,
 }: BaseNodeProps) {
   const duplicateSelectedNodes = useWorkflowStore((state) => state.duplicateSelectedNodes);
   const deleteSelectedNodes = useWorkflowStore((state) => state.deleteSelectedNodes);
@@ -43,31 +45,31 @@ export function BaseNode({
         "bg-white dark:bg-[#1e1e1e]",
         "shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:shadow-none",
         className || "w-[246px]",
-        selected
+        status === 'running'
+          ? "node-running"
+          : status === 'error'
+          ? "border-red-500"
+          : selected
           ? "border-[#FFC700] shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_18px_-6px_rgba(255,199,0,0.4)] dark:border-[#FFC700] dark:shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_18px_-6px_rgba(255,199,0,0.4)]"
           : highlighted
           ? "border-[#FFC700]/60 shadow-[0_0_0_1px_rgba(255,199,0,0.4)] dark:border-[#FFC700]/50"
-          : "border-transparent",
-        status === 'running' && "animate-pulse-glow border-[#FFC700]/50",
-        status === 'error' && "border-red-500"
+          : "border-transparent"
       )}
     >
       {/* Node Header (Floating Outside) */}
       <div className="absolute -top-6 left-1 flex items-center gap-2">
         <div className="text-[#FFC700] flex h-4 w-4 items-center justify-center">{icon}</div>
         <div className="text-[12px] font-medium text-neutral-600 dark:text-neutral-400">{displayTitle}</div>
-        {status === 'running' && (
-          <div className="ml-auto flex items-center justify-center">
-            <span className="flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-blue-400 opacity-80"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Main Content Area */}
       <div className="flex flex-col gap-2 p-3">
+        {showLabels && (inputs.length > 0 || outputs.length > 0) && (
+          <div className="flex items-center justify-between text-[11px] font-normal text-neutral-500 pb-1 px-0.5">
+            <span>{inputs.length > 0 ? 'Input' : ''}</span>
+            <span className="opacity-80">{outputs.length > 0 ? 'Output' : ''}</span>
+          </div>
+        )}
         {children}
       </div>
 
@@ -80,7 +82,8 @@ export function BaseNode({
           id={input.id}
           title={input.label ?? input.id}
           aria-label={input.label ?? input.id}
-          style={{ top: `${inputs.length === 1 ? 21.5 : i * 28 + 21.5}px` }}
+          className={input.className}
+          style={{ top: input.top ?? `${inputs.length === 1 ? 21.5 : i * 28 + 21.5}px` }}
         />
       ))}
 
@@ -93,7 +96,8 @@ export function BaseNode({
           id={output.id}
           title={output.label ?? output.id}
           aria-label={output.label ?? output.id}
-          style={{ top: `${outputs.length === 1 ? 21.5 : i * 28 + 21.5}px` }}
+          className={output.className}
+          style={{ top: output.top ?? `${outputs.length === 1 ? 21.5 : i * 28 + 21.5}px` }}
         />
       ))}
     </div>

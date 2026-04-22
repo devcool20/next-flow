@@ -31,11 +31,8 @@ export const TextNode = memo(function TextNode({ id, data, selected }: { id: str
       highlighted={Boolean(data.highlighted)}
       inputs={[{ id: 'input', label: 'Input' }]}
       outputs={[{ id: 'output', label: 'text' }]}
+      showLabels={true}
     >
-      <div className="flex items-center justify-between text-[11px] font-normal text-neutral-500 pt-1">
-        <span>Input</span>
-        <span className="opacity-80">Output</span>
-      </div>
       <div className="flex items-center justify-between text-neutral-400 mb-1">
         <Tooltip content="Edit formatting" side="top">
           <button
@@ -63,7 +60,7 @@ export const TextNode = memo(function TextNode({ id, data, selected }: { id: str
       </div>
       <div className="rounded-lg bg-neutral-100 dark:bg-[#111111] p-2 min-h-[104px]">
         <textarea
-          className="w-full h-auto min-h-[88px] resize-none overflow-hidden bg-transparent p-0 text-[13px] text-neutral-800 dark:text-white/80 font-light placeholder:text-neutral-400 dark:placeholder:text-white/25 focus:outline-none nodrag nowheel"
+          className="w-full h-auto min-h-[88px] resize-none overflow-hidden bg-transparent p-0 text-[13px] font-light text-neutral-800 dark:text-white/80 placeholder:text-neutral-400 dark:placeholder:text-white/25 focus:outline-none nodrag nowheel"
           placeholder="Write something..."
           value={(data.value as string) || ''}
           onChange={(e) => {

@@ -19,11 +19,11 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
       selected={selected}
       highlighted={Boolean(data.highlighted)}
       inputs={[
-        { id: 'video_url', label: 'video_url' },
+        { id: 'video_url', label: 'video_url', className: 'handle-blue' },
         { id: 'timestamp', label: 'timestamp' },
       ]}
       outputs={[
-        { id: 'output', label: 'frame_url' }
+        { id: 'output', label: 'frame_url', className: 'handle-blue' }
       ]}
     >
       <div className="flex flex-col gap-2">
@@ -31,7 +31,7 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
         
         <input 
           type="text" 
-          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-sm text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]" 
+          className="w-full bg-neutral-100 rounded-md p-2 text-[13px] font-light text-neutral-800 focus:outline-none transition-colors dark:bg-[#111111] dark:text-white/80" 
           placeholder={timestampLinked ? 'linked from input' : 'e.g. 5s or 50%'}
           value={(data.timestamp as string) ?? ''}
           onChange={(e) => updateNodeData(id, { timestamp: e.target.value })}

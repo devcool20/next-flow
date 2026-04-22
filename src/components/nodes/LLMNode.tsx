@@ -1,8 +1,8 @@
-import { Brain, Copy } from 'lucide-react';
+import { Brain, Copy, ChevronDown, ChevronRight, Pencil, Image as ImageIcon } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
 import ReactMarkdown from 'react-markdown';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Tooltip } from '../shared/Tooltip';
 
 type NodeData = Record<string, unknown>;
@@ -14,87 +14,115 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
   const userLinked = hasInputConnection(id, 'user_message');
   const imagesLinked = hasInputConnection(id, 'images');
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Define handles with explicit top offsets to align with the visual rows
+  const inputs = [
+    { id: 'user_message', label: 'user', top: '265px' },
+    { id: 'images', label: 'image(s)', className: 'handle-blue', top: '385px' }
+  ];
+
+  // System prompt handle is only active if the drawer is open
+  if (isSettingsOpen) {
+    inputs.push({ id: 'system_prompt', label: 'system', className: '', top: '468px' });
+  }
+
   return (
     <BaseNode
       id={id}
-      title="Run Any LLM"
+      title="Node Name"
       icon={<Brain size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
       highlighted={Boolean(data.highlighted)}
-      className="w-[380px]"
-      inputs={[
-        { id: 'system_prompt', label: 'system' },
-        { id: 'user_message', label: 'user' },
-        { id: 'images', label: 'image(s)' }
-      ]}
+      className="w-[340px]"
+      inputs={inputs}
       outputs={[
-        { id: 'output', label: 'response' }
+        { id: 'output', label: 'response', top: '253px' }
       ]}
     >
-      <div className="flex flex-col gap-3">
-        {/* Model Selector */}
-        <select
-          className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-sm text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors appearance-none dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
-          value={(data.model as string) || 'gemini-2.5-flash'}
-          onChange={(e) => updateNodeData(id, { model: e.target.value })}
-        >
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-        </select>
-        
-        <div className={systemLinked ? "opacity-50 pointer-events-none" : ""}>
-          <textarea
-            className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-xs text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors min-h-[56px] dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
-            placeholder={systemLinked ? 'system prompt linked' : 'System prompt (optional)'}
-            value={(data.systemPrompt as string) || ''}
-            onChange={(e) => updateNodeData(id, { systemPrompt: e.target.value })}
-            disabled={systemLinked}
-          />
+      <div className="flex flex-col relative">
+        {/* Output Area - Now at the top */}
+        <div className="w-full bg-neutral-100 dark:bg-[#1A1A1A] rounded-md min-h-[220px] p-4 text-[15px] font-normal text-neutral-800 dark:text-white mb-2 custom-scrollbar overflow-y-auto">
+          {data.output ? (
+            <ReactMarkdown className="prose dark:prose-invert max-w-none">{String(data.output)}</ReactMarkdown>
+          ) : (
+             <span className="text-neutral-400 dark:text-white/20"></span>
+          )}
+        </div>
+
+        {/* Output Label aligned to the right handle */}
+        <div className="flex justify-end items-center mb-4 pr-1">
+          <span className="text-[13px] text-neutral-500 dark:text-white/40">Output</span>
+        </div>
+
+        {/* User Prompt Section */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[13px] text-neutral-500 dark:text-white/40">Prompt</span>
+          <Pencil size={12} className="text-neutral-500 dark:text-white/20" />
         </div>
         
-        <div className={userLinked ? "opacity-50 pointer-events-none" : ""}>
+        <div className={userLinked ? "opacity-50 pointer-events-none mb-3" : "mb-3"}>
           <textarea
-            className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-xs text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors min-h-[72px] dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
-            placeholder={userLinked ? 'user prompt linked' : 'User message'}
+            className="w-full bg-neutral-100 dark:bg-[#1A1A1A] rounded-md p-3 text-[13px] font-light text-neutral-800 dark:text-white/80 focus:outline-none transition-colors min-h-[100px] resize-none overflow-hidden placeholder:text-neutral-400 dark:placeholder:text-white/20"
+            placeholder={userLinked ? 'user prompt linked' : 'hi'}
             value={(data.userMessage as string) || ''}
             onChange={(e) => updateNodeData(id, { userMessage: e.target.value })}
             disabled={userLinked}
           />
         </div>
-        
-        <div className={imagesLinked ? "opacity-50 pointer-events-none" : ""}>
-          <input
-            className="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 text-xs text-neutral-800 focus:outline-none focus:border-neutral-400 transition-colors dark:bg-[#1A1A1A] dark:border-[#333] dark:text-gray-300 dark:focus:border-[#555]"
-            placeholder={imagesLinked ? 'images linked from upstream' : 'Image URL(s), comma-separated (optional)'}
-            value={(data.imagesInput as string) || ''}
-            onChange={(e) => updateNodeData(id, { imagesInput: e.target.value })}
-            disabled={imagesLinked}
-          />
+
+        {/* Image Section */}
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-[13px] text-neutral-500 dark:text-white/40">Image</span>
+          <div className={imagesLinked ? "opacity-50 pointer-events-none flex-1" : "flex-1"}>
+             <div className="flex items-center justify-between w-full bg-neutral-100 dark:bg-[#111111] rounded-md px-3 py-1.5 cursor-text">
+                <span className="text-[13px] text-neutral-500 dark:text-white/40">Add file</span>
+                <ImageIcon size={12} className="text-neutral-500 dark:text-white/20" />
+             </div>
+          </div>
         </div>
 
-        {/* Output Area */}
-        {Boolean(data.output) && (
-          <div className="mt-2 p-3 bg-neutral-100 dark:bg-white/5 rounded-lg border border-neutral-200 dark:border-white/10 animate-in fade-in slide-in-from-top-1 group/output">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-white/40">Response</span>
-              <Tooltip content="Copy response" side="top">
-                <button
-                  className="rounded p-1 hover:bg-black/10 hover:text-neutral-900 dark:hover:bg-white/10 dark:hover:text-white transition-colors opacity-0 group-hover/output:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(String(data.output));
-                  }}
-                >
-                  <Copy size={12} />
-                </button>
-              </Tooltip>
+        {/* Settings Collapsible Section */}
+        <div className="flex flex-col">
+          <button 
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className="flex items-center gap-1.5 text-[13px] text-neutral-500 dark:text-white/40 hover:text-neutral-700 dark:hover:text-white/60 transition-colors mb-2 w-max"
+          >
+            {isSettingsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <span>Settings</span>
+          </button>
+          
+          {isSettingsOpen && (
+            <div className="flex flex-col gap-3 pl-1 animate-in slide-in-from-top-1 fade-in">
+              <div className="flex items-center gap-3">
+                 <span className="text-[13px] text-neutral-500 dark:text-white/40 w-[45px]">Model</span>
+                 <select
+                    className="flex-1 bg-neutral-100 dark:bg-[#111111] rounded-md p-1.5 px-3 text-[13px] font-medium text-neutral-800 dark:text-white focus:outline-none transition-colors appearance-none"
+                    value={(data.model as string) || 'gemini-2.5-flash'}
+                    onChange={(e) => updateNodeData(id, { model: e.target.value })}
+                 >
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                 </select>
+              </div>
+              
+              <div className={systemLinked ? "opacity-50 pointer-events-none flex flex-col gap-1" : "flex flex-col gap-1"}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] text-neutral-500 dark:text-white/40">System Prompt</span>
+                  <Pencil size={12} className="text-neutral-500 dark:text-white/20" />
+                </div>
+                <textarea
+                  className="w-full bg-neutral-100 dark:bg-[#111111] rounded-md p-3 text-[13px] font-light text-neutral-800 dark:text-white/80 focus:outline-none transition-colors min-h-[60px] resize-none overflow-hidden"
+                  placeholder={systemLinked ? 'system prompt linked' : 'You are a helpful assistant.'}
+                  value={(data.systemPrompt as string) || ''}
+                  onChange={(e) => updateNodeData(id, { systemPrompt: e.target.value })}
+                  disabled={systemLinked}
+                />
+              </div>
             </div>
-            <div className="custom-scrollbar max-h-[400px] overflow-y-auto text-sm font-sans text-neutral-800 dark:text-white/90 prose dark:prose-invert max-w-none pr-1">
-              <ReactMarkdown>{String(data.output)}</ReactMarkdown>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </BaseNode>
   );

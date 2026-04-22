@@ -33,7 +33,7 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
       highlighted={Boolean(data.highlighted)}
-      outputs={[{ id: 'video_url', label: 'video' }]}
+      outputs={[{ id: 'video_url', label: 'video', className: 'handle-blue' }]}
     >
       <div className="flex flex-col gap-3 h-full">
         {data.videoUrl ? (
@@ -58,11 +58,11 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
         ) : (
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="w-full h-32 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 bg-neutral-50 hover:bg-neutral-100 hover:border-neutral-400 text-neutral-400 transition-colors group dark:border-[#333] dark:bg-[#1A1A1A] dark:hover:bg-[#222] dark:hover:border-[#555] dark:text-gray-400"
+            className="w-full h-32 flex flex-col items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-400 transition-colors group dark:bg-[#111111] dark:hover:bg-[#1a1a1a] dark:text-gray-500 rounded-md"
           >
-            <UploadCloud size={24} className="group-hover:text-amber-500 text-neutral-400 dark:text-gray-400 transition-colors" />
-            <span className="text-xs font-medium text-neutral-600 dark:text-gray-300">Click to upload</span>
-            <span className="text-[10px] text-neutral-400 dark:text-gray-500">MP4, MOV max 50MB</span>
+            <UploadCloud size={24} className="group-hover:text-amber-500 transition-colors" />
+            <span className="text-xs font-medium dark:text-gray-400">Click to upload</span>
+            <span className="text-[10px] dark:text-gray-500">MP4, MOV max 50MB</span>
           </button>
         )}
         
