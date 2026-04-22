@@ -1,6 +1,6 @@
 'use client';
 import { clsx } from 'clsx';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useWorkflowStore } from '@/lib/store';
 import { Filter, History, ImageIcon, PlayCircle } from 'lucide-react';
 
@@ -63,6 +63,44 @@ function formatRelativeTime(dateIso: string) {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
+function renderFormattedValue(value: string) {
+  const urlRegex = /(https?:\/\/[^\s"']+)/g;
+  const parts = value.split(urlRegex);
+  return parts.map((part, i) => {
+    if (part.match(urlRegex)) {
+      const isImage = /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg)(\?|$)/i.test(part) || part.includes('picsum.photos');
+      
+      return (
+        <div key={i} className="my-1.5 flex flex-col gap-1.5">
+          <a
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#4b9cff] underline decoration-[#4b9cff]/40 hover:decoration-[#4b9cff] transition-all break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+          {isImage && (
+            <div className="relative h-24 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-inner group-hover:border-white/20 transition-colors">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src={part} 
+                alt="Output Preview" 
+                className="h-full w-full object-cover transition-transform hover:scale-110 duration-500" 
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 import type { ThemeMode } from './Shell';
 
 export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
@@ -73,6 +111,22 @@ export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean;
   const runWorkflow = useWorkflowStore((state) => state.runWorkflow);
   const runSelectedWorkflow = useWorkflowStore((state) => state.runSelectedWorkflow);
   const selectHistoryRun = useWorkflowStore((state) => state.selectHistoryRun);
+  const setNodes = useWorkflowStore((state) => state.setNodes);
+  void setNodes; // referenced below via getState()
+
+  // Clear highlights when sidebar is closed
+  useEffect(() => {
+    if (!isOpen) {
+      // Strip highlighted flag from all nodes and clear activeRunId
+      const { nodes: currentNodes } = useWorkflowStore.getState();
+      const cleared = currentNodes.map((n) => ({
+        ...n,
+        data: { ...n.data, highlighted: false },
+        selected: false,
+      }));
+      useWorkflowStore.setState({ nodes: cleared, activeRunId: null });
+    }
+  }, [isOpen]);
 
   const assets = useMemo(() => {
     const collected: AssetEntry[] = [];
@@ -156,6 +210,7 @@ export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean;
             activeRunId={activeRunId}
             activeRun={activeRun}
             isRunning={isRunning}
+            nodes={nodes}
             runWorkflow={runWorkflow}
             runSelectedWorkflow={runSelectedWorkflow}
             selectHistoryRun={selectHistoryRun}
@@ -163,6 +218,95 @@ export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean;
         )}
       </div>
     </aside>
+  );
+}
+
+function NodeRunItem({ nodeRun, isSelected }: { nodeRun: any; isSelected: boolean | undefined }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const duration = ((new Date(nodeRun.finishedAt).getTime() - new Date(nodeRun.startedAt).getTime()) / 1000).toFixed(1);
+
+  return (
+    <div className="group relative pl-6 pb-4 last:pb-0">
+      {/* Tree Lines */}
+      <div className="absolute left-0 top-0 h-full w-[1px] bg-[#2a2f37]" />
+      <div className="absolute left-0 top-2.5 h-[1px] w-4 bg-[#2a2f37]" />
+
+      <div
+        className={clsx(
+          'flex flex-col gap-1.5 transition-all duration-200 cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg',
+          isSelected && 'bg-white/5 border border-white/5 shadow-sm'
+        )}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-medium text-[#e6edf9]">{nodeRun.title}</span>
+          {nodeRun.status === 'success' ? (
+            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-500">
+              <svg viewBox="0 0 24 24" className="h-2 w-2 fill-none stroke-current stroke-[3]" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+          ) : (
+            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500/20 text-red-500">
+              <svg viewBox="0 0 24 24" className="h-2 w-2 fill-none stroke-current stroke-[3]" xmlns="http://www.w3.org/2000/svg">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </div>
+          )}
+          <span className="text-[10px] text-[#8592a8]">{duration}s</span>
+        </div>
+
+        {/* Output/Error nesting */}
+        <div className="relative pl-4 space-y-1">
+          <div className="absolute left-0 top-0 h-full w-[1px] border-l border-dashed border-[#2a2f37]" />
+          <div className="absolute left-0 top-2 h-[1px] w-3 border-t border-dashed border-[#2a2f37]" />
+
+          {!isExpanded ? (
+            nodeRun.status === 'success' ? (
+              <div className="flex overflow-hidden gap-1 text-[11px] text-[#9ca7bb]">
+                <span className="shrink-0 font-semibold text-[#8592a8]">Output:</span>
+                <span className="truncate opacity-80 italic">
+                  {renderFormattedValue(
+                    typeof nodeRun.outputs.output === 'string'
+                      ? `"${nodeRun.outputs.output.slice(0, 60)}${nodeRun.outputs.output.length > 60 ? '...' : ''}"`
+                      : JSON.stringify(nodeRun.outputs).slice(0, 60)
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="flex gap-1 text-[11px] text-red-400/80">
+                <span className="shrink-0 font-semibold">Error:</span>
+                <span className="truncate italic">"{nodeRun.error || 'Unknown error'}"</span>
+              </div>
+            )
+          ) : (
+            <div className="animate-in fade-in slide-in-from-top-1 space-y-3 pt-2 duration-200">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-tight text-[#8592a8]">Inputs</p>
+                <div className="custom-scrollbar max-h-48 overflow-y-auto rounded-lg border border-white/5 bg-black/40 p-2 font-mono text-[11px] text-[#9ca7bb]">
+                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.inputs, null, 2)}</pre>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-tight text-[#8592a8]">Outputs</p>
+                <div className="custom-scrollbar max-h-64 overflow-y-auto rounded-lg border border-white/5 bg-black/40 p-2 font-mono text-[11px] text-[#e6edf9]">
+                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.outputs, null, 2)}</pre>
+                </div>
+              </div>
+              {nodeRun.error && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-tight text-red-400/80">Error</p>
+                  <div className="whitespace-normal break-words rounded-lg border border-red-500/10 bg-red-950/20 p-2 font-mono text-[11px] leading-relaxed text-red-400">
+                    {nodeRun.error}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -206,6 +350,7 @@ function VersionHistoryView({
   activeRunId,
   activeRun,
   isRunning,
+  nodes,
   runWorkflow,
   runSelectedWorkflow,
   selectHistoryRun,
@@ -214,6 +359,7 @@ function VersionHistoryView({
   activeRunId: string | null;
   activeRun: ReturnType<typeof useWorkflowStore.getState>['history'][number] | null;
   isRunning: boolean;
+  nodes: ReturnType<typeof useWorkflowStore.getState>['nodes'];
   runWorkflow: () => Promise<void>;
   runSelectedWorkflow: () => Promise<void>;
   selectHistoryRun: (runId: string) => void;
@@ -239,66 +385,70 @@ function VersionHistoryView({
         </button>
       </div>
 
-      {history.length === 0 ? (
-        <div className="rounded-2xl border border-[#2a2f37] bg-[#15191f] p-4 text-sm text-[#929caf]">
-          No versions yet.
+      {activeRun && (
+        <div className="rounded-2xl border border-[#2a2f37] bg-[#141920] p-4">
+          <div className="mb-4 flex items-center justify-between border-b border-[#2a2f37] pb-3">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-[13px] font-bold text-[#e6edf9]">Current Run Details</p>
+              <p className="text-[10px] text-[#8592a8]">
+                {new Date(activeRun.startedAt).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}{' '}
+                ({activeRun.scope === 'full' ? 'Full Workflow' : activeRun.scope === 'single' ? 'Single Node' : `${activeRun.nodeRuns.length} nodes selected`})
+              </p>
+            </div>
+          </div>
+
+          <div className="relative space-y-0">
+            {activeRun.nodeRuns.length === 0 ? (
+              <p className="py-4 text-center text-[11px] text-[#8592a8]">No nodes executed in this run</p>
+            ) : (
+              activeRun.nodeRuns.map((nodeRun) => (
+                <NodeRunItem
+                  key={`${activeRun.id}-${nodeRun.nodeId}`}
+                  nodeRun={nodeRun}
+                  isSelected={nodes.find((n) => n.id === nodeRun.nodeId)?.selected}
+                />
+              ))
+            )}
+          </div>
         </div>
-      ) : (
-        <>
-          <div className="space-y-3">
+      )}
+
+      {history.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#5c6471]">History</p>
+          <div className="space-y-2">
             {history.map((run) => (
               <button
                 key={run.id}
                 onClick={() => selectHistoryRun(run.id)}
                 className={clsx(
-                  'w-full rounded-2xl border p-3 text-left transition-colors',
+                  'w-full rounded-xl border p-3 text-left transition-colors',
                   run.id === activeRunId ? 'border-[#4b9cff] bg-[#1a2433]' : 'border-[#2a2f37] bg-[#161a1f] hover:bg-[#1d222a]'
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className="rounded-md bg-black/35 px-2 py-0.5 text-xs text-[#e6edf9]">
+                  <span className="text-[11px] font-medium text-[#e6edf9]">
                     {formatRelativeTime(run.startedAt)}
                   </span>
-                  {run.id === activeRunId && (
-                    <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white">CURRENT</span>
-                  )}
+                  <span className={clsx(
+                    "text-[10px] font-bold uppercase",
+                    run.status === 'success' ? "text-emerald-500/70" : "text-red-500/70"
+                  )}>
+                    {run.status}
+                  </span>
                 </div>
-                <div className="relative mt-3 h-32 overflow-hidden rounded-xl bg-gradient-to-b from-[#30343a] to-[#1f2328]">
-                  <div className="absolute left-3 top-6 h-10 w-12 rounded bg-black/70" />
-                  <div className="absolute left-8 top-16 h-12 w-16 rounded bg-black/75" />
-                  <div className="absolute right-4 top-4 h-24 w-11 rounded bg-black/80" />
-                </div>
-                <p className="mt-2 text-xs text-[#9ca7bb]">
-                  {run.nodeRuns.length} node{run.nodeRuns.length === 1 ? '' : 's'} • {run.status}
+                <p className="mt-1 text-[10px] text-[#8592a8]">
+                  {run.nodeRuns.length} node{run.nodeRuns.length === 1 ? '' : 's'} • {run.scope} run
                 </p>
               </button>
             ))}
           </div>
-
-          {activeRun && (
-            <div className="rounded-2xl border border-[#2a2f37] bg-[#141920] p-3">
-              <p className="text-xs font-semibold text-[#e6edf9]">Run Details</p>
-              <div className="custom-scrollbar mt-2 max-h-52 space-y-2 overflow-y-auto">
-                {activeRun.nodeRuns.map((nodeRun) => (
-                  <div key={`${activeRun.id}-${nodeRun.nodeId}`} className="rounded-lg border border-[#2a2f37] bg-[#1a1f26] p-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#e6edf9]">{nodeRun.title}</span>
-                      <span
-                        className={clsx(
-                          nodeRun.status === 'success' && 'text-emerald-400',
-                          nodeRun.status === 'running' && 'text-yellow-400',
-                          nodeRun.status === 'error' && 'text-red-400'
-                        )}
-                      >
-                        {nodeRun.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );

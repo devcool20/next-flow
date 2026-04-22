@@ -28,9 +28,9 @@ export type ThemeMode = 'dark' | 'light';
 type RightPanelMode = 'assets' | 'versions';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
-  const [leftOpen, setLeftOpen] = useState(true);
+  const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
-  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('assets');
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('versions');
   const [rightMenuOpen, setRightMenuOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const rightMenuRef = useRef<HTMLDivElement | null>(null);
@@ -56,6 +56,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Never intercept when the user is typing in an input, textarea or editable element
+      const target = event.target as HTMLElement;
+      const isTyping =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable;
+
       const isUndo = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !event.shiftKey;
       const isRedo =
         ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'z') ||
@@ -63,18 +70,20 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       if (!isUndo && !isRedo) {
         const isDelete = event.key === 'Delete' || event.key === 'Backspace';
-        if (isDelete) {
+        if (isDelete && !isTyping) {
           event.preventDefault();
           deleteSelectedNodes();
         }
         return;
       }
 
-      event.preventDefault();
-      if (isUndo) {
-        undoGraph();
-      } else {
-        redoGraph();
+      if (!isTyping) {
+        event.preventDefault();
+        if (isUndo) {
+          undoGraph();
+        } else {
+          redoGraph();
+        }
       }
     };
 
@@ -393,7 +402,7 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
   return (
     <div className="relative flex items-center" ref={menuRef}>
       <div
-        className={`flex h-10 items-center rounded-xl border transition-colors ${
+        className={`flex h-11 items-center rounded-xl border transition-colors ${
           theme === 'dark' ? 'border-white/5 bg-[#1a1a1a]/90 shadow-lg' : 'border-[#d6dde9] bg-white text-[#0f172a] shadow-sm'
         }`}
       >
@@ -409,7 +418,7 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
           <ChevronDown size={14} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
         </button>
         <div className={`h-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
-        <div className={`relative flex items-center overflow-hidden transition-all duration-300 ease-out ${isFocused ? 'w-48' : 'w-28'}`}>
+        <div className={`relative flex items-center overflow-hidden transition-all duration-300 ease-out ${isFocused ? 'w-44' : 'w-24'}`}>
           <input
             type="text"
             value={workspaceName}

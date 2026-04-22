@@ -12,6 +12,7 @@ interface BaseNodeProps {
   inputs?: { id: string; label?: string }[];
   outputs?: { id: string; label?: string }[];
   selected?: boolean;
+  highlighted?: boolean;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ export function BaseNode({
   inputs = [],
   outputs = [],
   selected = false,
+  highlighted = false,
   className,
 }: BaseNodeProps) {
   const duplicateSelectedNodes = useWorkflowStore((state) => state.duplicateSelectedNodes);
@@ -36,17 +38,22 @@ export function BaseNode({
       <div
       data-node-id={id}
       className={clsx(
-        "rounded-xl border border-neutral-200 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-suisse dark:border-white/10 dark:bg-[#161616] dark:shadow-none transition-all duration-300 relative",
+        "rounded-xl border font-suisse transition-all duration-300 relative",
+        /* Light: pure white card. Dark: slightly lighter than canvas (#1a1a1a) */
+        "bg-white dark:bg-[#1e1e1e]",
+        "shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:shadow-none",
         className || "w-[246px]",
         selected
-          ? "border-[#eab308] ring-1 ring-[#eab308] shadow-[0_0_0_1px_rgba(234,179,8,1),0_0_22px_-8px_rgba(234,179,8,0.4)] dark:border-[#FFC700] dark:ring-[#FFC700] dark:shadow-[0_0_0_1px_rgba(255,199,0,1),0_0_22px_-8px_rgba(255,199,0,0.4)]"
-          : "hover:border-neutral-300 dark:hover:border-white/20",
+          ? "border-[#FFC700] shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_18px_-6px_rgba(255,199,0,0.4)] dark:border-[#FFC700] dark:shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_18px_-6px_rgba(255,199,0,0.4)]"
+          : highlighted
+          ? "border-[#FFC700]/60 shadow-[0_0_0_1px_rgba(255,199,0,0.4)] dark:border-[#FFC700]/50"
+          : "border-transparent",
         status === 'running' && "animate-pulse-glow border-[#FFC700]/50",
         status === 'error' && "border-red-500"
       )}
     >
       {/* Node Header (Floating Outside) */}
-      <div className="absolute -top-7 left-1 flex items-center gap-2">
+      <div className="absolute -top-6 left-1 flex items-center gap-2">
         <div className="text-[#FFC700] flex h-4 w-4 items-center justify-center">{icon}</div>
         <div className="text-[12px] font-medium text-neutral-600 dark:text-neutral-400">{displayTitle}</div>
         {status === 'running' && (
@@ -60,44 +67,34 @@ export function BaseNode({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 p-3">
         {children}
       </div>
 
-      {/* Input Handles (Left) */}
+      {/* Input Handles (Left) - aligned with the Input/Output label row */}
       {inputs.map((input, i) => (
-        <div
+        <Handle
           key={input.id}
-          className="absolute left-0 -translate-x-1/2 flex items-center"
-          style={{ top: `${inputs.length === 1 ? 54 : i * 29 + 52}px` }}
-        >
-          <Handle
-            type="target"
-            position={Position.Left}
-            id={input.id}
-            title={input.label ?? input.id}
-            aria-label={input.label ?? input.id}
-            className="z-10 !h-3 !w-3 !rounded-full !border-[1.5px] border-white !bg-[#FFC700] transition-transform hover:scale-125 dark:border-[#161616]"
-          />
-        </div>
+          type="target"
+          position={Position.Left}
+          id={input.id}
+          title={input.label ?? input.id}
+          aria-label={input.label ?? input.id}
+          style={{ top: `${inputs.length === 1 ? 21.5 : i * 28 + 21.5}px` }}
+        />
       ))}
 
-      {/* Output Handles (Right) */}
+      {/* Output Handles (Right) - aligned with Output label */}
       {outputs.map((output, i) => (
-        <div
+        <Handle
           key={output.id}
-          className="absolute right-0 translate-x-1/2 flex items-center"
-          style={{ top: `${outputs.length === 1 ? 54 : i * 29 + 52}px` }}
-        >
-          <Handle
-            type="source"
-            position={Position.Right}
-            id={output.id}
-            title={output.label ?? output.id}
-            aria-label={output.label ?? output.id}
-            className="z-10 !h-3 !w-3 !rounded-full !border-[1.5px] border-white !bg-[#FFC700] transition-transform hover:scale-125 dark:border-[#161616]"
-          />
-        </div>
+          type="source"
+          position={Position.Right}
+          id={output.id}
+          title={output.label ?? output.id}
+          aria-label={output.label ?? output.id}
+          style={{ top: `${outputs.length === 1 ? 21.5 : i * 28 + 21.5}px` }}
+        />
       ))}
     </div>
     </>

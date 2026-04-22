@@ -20,7 +20,8 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
       title="Run Any LLM"
       icon={<Brain size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
-      selected={selected || Boolean(data.highlighted)}
+      selected={selected}
+      highlighted={Boolean(data.highlighted)}
       className="w-[380px]"
       inputs={[
         { id: 'system_prompt', label: 'system' },
@@ -89,7 +90,7 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
                 </button>
               </Tooltip>
             </div>
-            <div className="text-sm font-sans text-neutral-800 dark:text-white/90 prose dark:prose-invert max-w-none">
+            <div className="custom-scrollbar max-h-[400px] overflow-y-auto text-sm font-sans text-neutral-800 dark:text-white/90 prose dark:prose-invert max-w-none pr-1">
               <ReactMarkdown>{String(data.output)}</ReactMarkdown>
             </div>
           </div>

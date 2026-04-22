@@ -27,7 +27,8 @@ export const TextNode = memo(function TextNode({ id, data, selected }: { id: str
       title="Text"
       icon={<span className="font-serif text-[14px] leading-none -mt-0.5">I</span>}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
-      selected={selected || Boolean(data.highlighted)}
+      selected={selected}
+      highlighted={Boolean(data.highlighted)}
       inputs={[{ id: 'input', label: 'Input' }]}
       outputs={[{ id: 'output', label: 'text' }]}
     >
@@ -60,16 +61,18 @@ export const TextNode = memo(function TextNode({ id, data, selected }: { id: str
           </button>
         </Tooltip>
       </div>
-      <textarea
-        className="w-full h-auto min-h-[104px] resize-none overflow-hidden bg-transparent p-0 text-[13px] text-neutral-800/90 font-light placeholder:text-neutral-400 focus:outline-none dark:text-white/80 dark:placeholder:text-neutral-500 nodrag nowheel"
-        placeholder="Write something..."
-        value={(data.value as string) || ''}
-        onChange={(e) => {
-          e.target.style.height = 'auto';
-          e.target.style.height = `${e.target.scrollHeight}px`;
-          updateNodeData(id, { value: e.target.value });
-        }}
-      />
+      <div className="rounded-lg bg-neutral-100 dark:bg-[#111111] p-2 min-h-[104px]">
+        <textarea
+          className="w-full h-auto min-h-[88px] resize-none overflow-hidden bg-transparent p-0 text-[13px] text-neutral-800 dark:text-white/80 font-light placeholder:text-neutral-400 dark:placeholder:text-white/25 focus:outline-none nodrag nowheel"
+          placeholder="Write something..."
+          value={(data.value as string) || ''}
+          onChange={(e) => {
+            e.target.style.height = 'auto';
+            e.target.style.height = `${e.target.scrollHeight}px`;
+            updateNodeData(id, { value: e.target.value });
+          }}
+        />
+      </div>
     </BaseNode>
   );
 });

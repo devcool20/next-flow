@@ -24,17 +24,23 @@
 }
 
 :root {
-  --background: #fbfbfb;
+  /* Light mode: warm off-white, matches Krea reference */
+  --background: #efefef;
   --foreground: #0f172a;
-  --dot-color: #e5e5e5;
-  --edge-color: #d4d4d4;
+  --dot-color: #bbbbbb;
+  --edge-color: rgba(255, 199, 0, 0.35);
+  --node-input-bg: #f5f5f5;
+  --handle-border: #efefef;
 }
 
 [data-theme="dark"] {
-  --background: #0a0a0a;
+  /* Dark mode: softer charcoal, matches Krea reference */
+  --background: #161616;
   --foreground: #ededed;
-  --dot-color: #2b2b2b;
-  --edge-color: rgba(255, 199, 0, 0.4);
+  --dot-color: #333333;
+  --edge-color: rgba(255, 199, 0, 0.35);
+  --node-input-bg: #111111;
+  --handle-border: #161616;
 }
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -65,8 +71,8 @@ body {
 }
 
 .dot-grid {
-  background-size: 20px 20px;
-  background-image: radial-gradient(circle, #1f1f1f 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, var(--dot-color) 0.8px, transparent 0.8px);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -93,14 +99,45 @@ body {
 
 .react-flow__edge-path {
   stroke: var(--edge-color);
-  stroke-width: 1.5;
+  stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
 }
 
-.react-flow__edge.selected path {
-  stroke: #ffd60a;
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #FFC700;
+  stroke-width: 2.8;
+}
+
+/* ─── Handles ─────────────────────────────────────────────── */
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  border: none !important;
+  background: #FFC700 !important;
+  /* Outer glow ring */
+  box-shadow: 0 0 0 2.5px rgba(255, 199, 0, 0.2) !important;
+  z-index: 10 !important;
+}
+
+.react-flow__handle:hover,
+.react-flow__handle:active {
+  width: 12px !important;
+  height: 12px !important;
+  box-shadow: 0 0 0 2.5px rgba(255, 199, 0, 0.25) !important;
+}
+
+/* ─── Selection marquee ───────────────────────────────────── */
+.react-flow__nodesselection-rect {
+  border: 1.5px solid rgba(255,199,0,0.5) !important;
+  background: rgba(255,199,0,0.04) !important;
+}
+
+/* Kill the default ReactFlow node selection outline */
+.react-flow__node.selected > * {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .nextflow-controls {

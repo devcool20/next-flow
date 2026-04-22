@@ -16,7 +16,8 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
       title="Extract Frame"
       icon={<ImageMinus size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
-      selected={selected || Boolean(data.highlighted)}
+      selected={selected}
+      highlighted={Boolean(data.highlighted)}
       inputs={[
         { id: 'video_url', label: 'video_url' },
         { id: 'timestamp', label: 'timestamp' },

@@ -7,6 +7,7 @@ import {
   MiniMap,
   ReactFlowProvider,
   useReactFlow,
+  SelectionMode,
   type Edge,
   type Node,
   BackgroundVariant,
@@ -269,6 +270,7 @@ function WorkflowCanvasBody({
         nodesDraggable={nodesDraggable}
         elementsSelectable={elementsSelectable}
         selectionOnDrag={elementsSelectable}
+        selectionMode={SelectionMode.Partial}
         onNodeContextMenu={(event, node) => {
           event.preventDefault();
           setContextMenu({
@@ -297,7 +299,7 @@ function WorkflowCanvasBody({
         fitView
         className="bg-[var(--background)]"
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--dot-color)" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={0.8} color="var(--dot-color)" />
         <Controls 
           className="nextflow-controls !bg-[#1a1a1a]/95 backdrop-blur-md !border !border-white/10 !text-[#8e8e8e] !rounded-xl overflow-hidden shadow-2xl [&>button]:!border-white/5 [&>button]:hover:!bg-white/10 [&>button]:hover:!text-white [&>button]:transition-colors" 
           position="bottom-right" 

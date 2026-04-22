@@ -31,7 +31,8 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
       title="Upload Video"
       icon={<Film size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
-      selected={selected || Boolean(data.highlighted)}
+      selected={selected}
+      highlighted={Boolean(data.highlighted)}
       outputs={[{ id: 'video_url', label: 'video' }]}
     >
       <div className="flex flex-col gap-3 h-full">

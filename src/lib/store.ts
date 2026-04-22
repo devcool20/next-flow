@@ -358,6 +358,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       isRunning: true,
       nodes: nodes.map((node) => ({
         ...node,
+        selected: false, // Clear selection on full run
         data: {
           ...node.data,
           status: connectedNodeIds.has(node.id) || edges.length === 0 ? 'running' : 'idle',
@@ -566,7 +567,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const payload = (await response.json()) as { runs: WorkflowRun[] };
     set({
       history: payload.runs ?? [],
-      activeRunId: payload.runs?.[0]?.id ?? get().activeRunId,
+      activeRunId: get().activeRunId ?? payload.runs?.[0]?.id ?? null,
     });
   },
   persistWorkflow: async () => {

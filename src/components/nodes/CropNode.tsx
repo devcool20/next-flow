@@ -21,7 +21,8 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
       title="Crop Image"
       icon={<Crop size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
-      selected={selected || Boolean(data.highlighted)}
+      selected={selected}
+      highlighted={Boolean(data.highlighted)}
       inputs={[
         { id: 'image_url', label: 'image_url' },
         { id: 'x_percent', label: 'x%' },
