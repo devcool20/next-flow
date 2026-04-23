@@ -270,13 +270,21 @@ async function triggerTaskAndPoll<TOutput = unknown>(taskId: string, payload: un
   }
 
   const handle = await tasks.trigger(taskId, payload);
-  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 15000);
-  if (!Number.isFinite(timeoutMs) || timeoutMs < 1000) {
-    throw new AppError('invalid_input', 'TRIGGER_POLL_TIMEOUT_MS must be a number >= 1000.', 500, {
+  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 45000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 5000) {
+    throw new AppError('invalid_input', 'TRIGGER_POLL_TIMEOUT_MS must be a number >= 5000.', 500, {
       value: process.env.TRIGGER_POLL_TIMEOUT_MS,
     });
   }
-  const pollPromise = runs.poll(handle.id, { pollIntervalMs: 1000 });
+  const pollIntervalMs = Number(process.env.TRIGGER_POLL_INTERVAL_MS ?? 500);
+  if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 250) {
+    throw new AppError('invalid_input', 'TRIGGER_POLL_INTERVAL_MS must be a number >= 250.', 500, {
+      value: process.env.TRIGGER_POLL_INTERVAL_MS,
+    });
+  }
+
+  const safePollIntervalMs = Math.min(pollIntervalMs, Math.max(250, timeoutMs - 250));
+  const pollPromise = runs.poll(handle.id, { pollIntervalMs: safePollIntervalMs });
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
       reject(
