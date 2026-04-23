@@ -23,6 +23,13 @@ type DependencyState = {
   gemini: 'ok' | 'unavailable' | 'not_required';
 };
 
+type TriggerRunErrorShape = {
+  message?: string;
+  name?: string;
+  stackTrace?: string;
+  [key: string]: unknown;
+};
+
 const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro']);
 const FORCE_TRIGGER_ONLY = process.env.NEXTFLOW_FORCE_TRIGGER_ONLY === 'true';
 const ALLOW_LOCAL_FALLBACK =
@@ -225,6 +232,35 @@ function createErrorResponse(error: unknown, dependencies?: Partial<DependencySt
   return NextResponse.json(payload, { status: appError.status });
 }
 
+function extractTriggerRunErrorMessage(error: unknown): string | null {
+  if (!error) return null;
+
+  if (typeof error === 'string') {
+    const trimmed = error.trim();
+    return trimmed || null;
+  }
+
+  if (typeof error === 'object') {
+    const candidate = error as TriggerRunErrorShape;
+
+    if (typeof candidate.message === 'string' && candidate.message.trim()) {
+      return candidate.message.trim();
+    }
+
+    if (Array.isArray((candidate as { issues?: unknown[] }).issues)) {
+      const messages = ((candidate as { issues?: unknown[] }).issues ?? [])
+        .map((issue) => extractTriggerRunErrorMessage(issue))
+        .filter((message): message is string => Boolean(message));
+
+      if (messages.length > 0) {
+        return messages.join(' | ');
+      }
+    }
+  }
+
+  return null;
+}
+
 async function triggerTaskAndPoll<TOutput = unknown>(taskId: string, payload: unknown): Promise<TOutput> {
   if (!process.env.TRIGGER_SECRET_KEY) {
     throw new AppError('dependency_unavailable', `Trigger.dev is not configured for ${taskId}.`, 503, {
@@ -262,11 +298,14 @@ async function triggerTaskAndPoll<TOutput = unknown>(taskId: string, payload: un
   const run = await Promise.race([pollPromise, timeoutPromise]);
 
   if (!run.isSuccess) {
-    throw new AppError('task_failed', `${taskId} failed in Trigger.dev.`, 502, {
+    const triggerErrorMessage = extractTriggerRunErrorMessage(run.error);
+
+    throw new AppError('task_failed', triggerErrorMessage ?? `${taskId} failed in Trigger.dev.`, 502, {
       task: taskId,
       runId: handle.id,
       status: run.status,
       error: run.error,
+      source: 'trigger.dev',
     });
   }
 
