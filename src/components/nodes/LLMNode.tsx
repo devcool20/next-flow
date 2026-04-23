@@ -52,25 +52,41 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
     return relativeTop + relativeHeight / 2;
   }, []);
 
+  const getHandleRoot = useCallback(() => {
+    return contentRef.current?.closest('[data-handle-root="true"]') as HTMLElement | null;
+  }, []);
+
   const recalculateHandleTops = useCallback(() => {
-    const root = contentRef.current?.closest(`[data-node-id="${id}"]`) as HTMLElement | null;
+    const root = getHandleRoot();
     if (!root) return;
 
     const systemTarget = isSettingsOpen ? systemPromptRowRef.current : settingsRowRef.current;
-    setTops({
+    const nextTops: HandleTopState = {
       output: getCenterTop(root, outputLabelRef.current, DEFAULT_TOPS.output),
       user_message: getCenterTop(root, promptRowRef.current, DEFAULT_TOPS.user_message),
       images: getCenterTop(root, imageRowRef.current, DEFAULT_TOPS.images),
       system_prompt: getCenterTop(root, systemTarget, DEFAULT_TOPS.system_prompt),
+    };
+
+    setTops((prev) => {
+      if (
+        prev.output === nextTops.output &&
+        prev.user_message === nextTops.user_message &&
+        prev.images === nextTops.images &&
+        prev.system_prompt === nextTops.system_prompt
+      ) {
+        return prev;
+      }
+      return nextTops;
     });
-  }, [getCenterTop, id, isSettingsOpen]);
+  }, [getCenterTop, getHandleRoot, isSettingsOpen]);
 
   useLayoutEffect(() => {
     recalculateHandleTops();
   }, [recalculateHandleTops, data.output, data.userMessage, data.systemPrompt, isSettingsOpen]);
 
   useLayoutEffect(() => {
-    const root = contentRef.current?.closest(`[data-node-id="${id}"]`) as HTMLElement | null;
+    const root = getHandleRoot();
     if (!root || typeof ResizeObserver === 'undefined') return;
 
     let rafId: number | null = null;
@@ -90,7 +106,7 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
       observer.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [id, recalculateHandleTops, isSettingsOpen]);
+  }, [getHandleRoot, id, recalculateHandleTops, isSettingsOpen]);
 
   const inputs = [
     { id: 'user_message', label: 'user', top: tops.user_message },

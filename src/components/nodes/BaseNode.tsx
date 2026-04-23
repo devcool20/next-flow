@@ -56,7 +56,8 @@ export function BaseNode({
       )}
 
       {/* Main Node Body */}
-      <div 
+      <div
+        data-handle-root="true"
         className={clsx(
           "relative flex flex-col rounded-xl border bg-white dark:bg-[#111111] transition-all duration-300",
           className || "w-[246px]",
