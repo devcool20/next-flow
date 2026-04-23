@@ -20,6 +20,7 @@ export default async function WorkflowEditorPage({
 
   let dbUnavailable = false;
   let graph: ReturnType<typeof parseWorkflowJson> | null = null;
+  let workflowName = 'Untitled';
 
   try {
     const { workflow } = await getUserWorkflowById(userId, workflowId);
@@ -27,6 +28,7 @@ export default async function WorkflowEditorPage({
       redirect('/nodes');
     }
     graph = parseWorkflowJson(workflow);
+    workflowName = workflow.name || 'Untitled';
   } catch (error) {
     if (isDatabaseUnavailableError(error)) {
       dbUnavailable = true;
@@ -37,7 +39,7 @@ export default async function WorkflowEditorPage({
 
   if (dbUnavailable || !graph) {
     return (
-      <Shell>
+      <Shell workflowId={workflowId} initialWorkflowName={workflowName}>
         <div className="flex h-full w-full items-center justify-center">
           <div className="rounded-xl border border-red-300/30 bg-red-500/10 px-6 py-4 text-sm text-red-200">
             Database unavailable. Please try again in a moment.
@@ -48,7 +50,7 @@ export default async function WorkflowEditorPage({
   }
 
   return (
-    <Shell>
+    <Shell workflowId={workflowId} initialWorkflowName={workflowName}>
       <div className="absolute inset-0 h-full w-full">
         <WorkflowCanvasWithProviderHydrated workflowId={workflowId} initialNodes={graph.nodes} initialEdges={graph.edges} />
       </div>

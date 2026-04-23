@@ -3,16 +3,17 @@
 
 :root {
   /* Global background matches Krea reference */
-  --background: #0A0A0A;
+  --background: #151515;
   --foreground: #F5F5F5;
   --dot-color: #1a1a1a;
   --edge-color: rgba(255, 199, 0, 0.35);
   --node-input-bg: #111111;
   --handle-border: #0A0A0A;
+  --nodes-hero-height: 438px;
 }
 
 [data-theme="dark"] {
-  --background: #0A0A0A;
+  --background: #151515;
   --foreground: #F5F5F5;
 }
 
@@ -171,4 +172,93 @@ body {
   color: #ffffff !important;
   border-color: #3a3a3a !important;
   background: #1e1e1e !important;
+}
+
+.nodes-hero {
+  height: var(--nodes-hero-height);
+}
+
+.nodes-main-surface {
+  background: #151515;
+}
+
+.route-loading-track {
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  height: 2px;
+  width: 100%;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.route-loading-track.is-active {
+  opacity: 1;
+}
+
+.route-loading-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  background: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  transition: transform 160ms linear;
+}
+
+.nodes-hero-image {
+  filter: none;
+  opacity: 0.98;
+}
+
+.nodes-hero-blur-left {
+  pointer-events: none;
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 48%,
+    rgba(0, 0, 0, 0.55) 58%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 48%,
+    rgba(0, 0, 0, 0.55) 58%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+.nodes-hero-projects-seam {
+  height: 92px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(
+    180deg,
+    #242424 0%,
+    #1d1d1d 38%,
+    #171717 100%
+  );
+}
+
+.nodes-projects-surface {
+  background: linear-gradient(
+    180deg,
+    #1d1d1d 0%,
+    #171717 38%,
+    #151515 100%
+  );
+}
+
+@media (max-width: 1536px) {
+  :root {
+    --nodes-hero-height: 412px;
+  }
+
+  .nodes-hero-projects-seam {
+    height: 80px;
+  }
 }

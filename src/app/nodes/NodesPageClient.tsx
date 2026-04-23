@@ -2,22 +2,39 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { UserButton } from '@clerk/nextjs';
 import { 
+  ArrowRight,
   ChevronDown, 
   EyeOff, 
   Search, 
   Sparkles, 
   Wand2, 
+  Plus,
   MoreVertical, 
   Trash2, 
   Edit2, 
-  Copy, 
-  ExternalLink 
+  Copy
 } from 'lucide-react';
 import LeftSidebar from '@/components/layout/LeftSidebar';
 import { WorkflowPreview } from '@/components/nodes/WorkflowPreview';
 import { deleteWorkflowAction, renameWorkflowAction, duplicateWorkflowAction, createBlankWorkflowAction, createMarketingKitWorkflowAction } from './actions';
+
+type TabId = 'projects' | 'apps' | 'examples' | 'templates';
+
+type WorkflowCard = {
+  id: string;
+  name: string;
+  updatedAt: string | Date;
+  nodes?: unknown;
+  edges?: unknown;
+};
+
+const tabs: Array<{ id: TabId; label: string }> = [
+  { id: 'projects', label: 'Projects' },
+  { id: 'apps', label: 'Apps' },
+  { id: 'examples', label: 'Examples' },
+  { id: 'templates', label: 'Templates' },
+];
 
 function getRelativeTimeLabel(date: Date) {
   const diffMs = date.getTime() - Date.now();
@@ -31,9 +48,9 @@ function getRelativeTimeLabel(date: Date) {
   return formatter.format(Math.round(diffMs / day), 'day');
 }
 
-export default function NodesPageClient({ workflows }: { workflows: any[] }) {
+export default function NodesPageClient({ workflows }: { workflows: WorkflowCard[] }) {
   const [isOpen, setIsOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'projects' | 'apps' | 'examples' | 'templates'>('projects');
+  const [activeTab, setActiveTab] = useState<TabId>('projects');
   const [searchQuery, setSearchQuery] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -67,59 +84,54 @@ export default function NodesPageClient({ workflows }: { workflows: any[] }) {
   };
 
   return (
-    <div className="flex h-screen bg-[#0A0A0A] text-[#F5F5F5] overflow-hidden font-inter tracking-tight">
+    <div className="flex h-screen overflow-hidden bg-[#151515] font-inter tracking-tight text-[#F5F5F5]">
       <LeftSidebar isOpen={isOpen} onToggle={() => setIsOpen(!isOpen)} theme="dark" />
       
-      <main className="flex-1 h-screen overflow-y-auto overflow-x-hidden bg-[#0A0A0A] scrollbar-none scrollbar-hide">
-        {/* Banner Section - High Fidelity */}
-        <section className="relative h-[380px] w-full border-b border-white/[0.04] overflow-hidden">
-          <div className="absolute inset-0 bg-[#0A0A0A]">
-             <img 
-               src="/icons/https---s-krea-ai-nodesHeaderBannerBlurGradient-webp-256.png" 
-               alt="Banner" 
-               className="w-full h-full object-cover opacity-40 blur-[4px]"
+      <main className="nodes-main-surface scrollbar-hide h-screen flex-1 overflow-x-hidden overflow-y-auto">
+        <section className="nodes-hero relative w-full overflow-hidden">
+          <div className="absolute inset-0">
+             <img
+               src="/icons/https---s-krea-ai-nodesHeaderBannerBlurGradient-webp-256.png"
+               alt="Banner"
+               className="nodes-hero-image h-full w-full object-cover object-center"
              />
-             <div className="absolute inset-0 bg-radial-[circle_at_center,_transparent_0%,_#0A0A0A_100%] opacity-90" />
-             <div className="absolute inset-0 bg-gradient-to-r from-[#0A0A0A] via-transparent to-[#0A0A0A]" />
-             <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
+             <div className="nodes-hero-blur-left absolute inset-y-0 left-0 w-[58%]" />
           </div>
           
-          <div className="relative h-full mx-auto max-w-[1400px] px-12 flex flex-col justify-center">
-            <div className="flex items-center gap-5 mb-5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b8dff] shadow-[0_0_40px_rgba(43,141,255,0.4)]">
-                <img src="/icons/https---s-krea-ai-icons-NodeEditor-png-128.png" alt="Node Editor" className="h-7 w-7" />
-              </div>
-              <h1 className="text-[40px] font-bold tracking-[-0.03em] text-white">Node Editor</h1>
+          <div className="relative mx-auto flex h-full max-w-[1400px] flex-col justify-start pl-[5%] pr-12 pt-[72px]">
+            <div className="mb-4 flex items-center gap-3">
+              <img src="/icons/https---s-krea-ai-icons-NodeEditor-png-128.png" alt="Node Editor" className="h-[30px] w-[30px]" />
+              <h1 className="text-[40px] font-normal tracking-[-0.02em] text-white">Node Editor</h1>
             </div>
             
-            <p className="max-w-[600px] text-[15px] font-medium text-white/50 leading-[1.6] mb-10 tracking-normal">
+            <p className="mb-12 max-w-[400px] text-[14px] font-medium leading-[1.5] tracking-[-0.004em] text-white/94">
               Nodes is the most powerful way to operate Krea. Connect every tool and model into complex automated pipelines.
             </p>
             
-            <form action={createBlankWorkflowAction}>
+            <form action={createBlankWorkflowAction} className="mt-2">
               <button
                 type="submit"
-                className="group flex items-center gap-3 rounded-full bg-white px-10 py-4 text-[15px] font-bold text-black hover:bg-[#F5F5F5] transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
+                className="group flex h-[39px] items-center gap-2 rounded-full bg-white px-7 text-[12px] font-semibold tracking-[-0.005em] text-black transition-colors hover:bg-[#f2f2f2]"
               >
-                New Workflow <span className="text-xl transition-transform group-hover:translate-x-1">&rarr;</span>
+                New Workflow
+                <ArrowRight size={12} strokeWidth={1.6} className="transition-transform group-hover:translate-x-[1px]" />
               </button>
             </form>
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1400px] px-12 py-12">
-          <div className="flex items-center justify-between border-b border-white/[0.04] pb-6 mb-10">
+        <section className="nodes-projects-surface mx-auto max-w-[1400px] px-12 pb-12 pt-8">
+          <div className="mb-10 flex items-center justify-between border-b border-white/[0.06] pb-6">
             <div className="flex items-center gap-4">
-              {[
-                { id: 'projects', label: 'Projects' },
-                { id: 'apps', label: 'Apps' },
-                { id: 'examples', label: 'Examples' },
-                { id: 'templates', label: 'Templates' }
-              ].map(tab => (
+              {tabs.map((tab) => (
                 <button 
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-5 py-2.5 rounded-full text-[13px] font-bold transition-all ${activeTab === tab.id ? 'bg-[#1a1a1a] text-white' : 'text-[#999999] hover:text-white/80'}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-2xl px-8 py-3 text-[13px] font-semibold tracking-[-0.01em] transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-[#242424] text-white'
+                      : 'text-white/74 hover:text-white'
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -127,63 +139,63 @@ export default function NodesPageClient({ workflows }: { workflows: any[] }) {
             </div>
             
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-[240px] items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 text-white/40">
-                <Search size={14} className="text-[#999999]" />
+              <div className="flex h-[48px] w-[280px] items-center gap-2 rounded-2xl border border-white/[0.13] bg-[#171717] px-4 text-white/40">
+                <Search size={16} className="text-white/52" />
                 <input 
                   type="text" 
                   placeholder="Search projects..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent text-[13px] w-full focus:outline-none placeholder:text-[#999999]/50"
+                  className="w-full bg-transparent text-[14px] text-white/82 focus:outline-none placeholder:text-white/42"
                 />
               </div>
-              <button className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 text-[13px] font-bold text-[#999999] hover:text-white transition-colors">
-                Last viewed <ChevronDown size={14} className="text-white/20" />
+              <button className="flex h-[48px] items-center gap-2 rounded-2xl border border-white/[0.13] bg-[#171717] px-5 text-[14px] font-semibold text-white/82 transition-colors hover:text-white">
+                Last viewed <ChevronDown size={16} className="text-white/35" />
               </button>
-              <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white">
-                <EyeOff size={14} />
+              <button className="flex h-[48px] w-[52px] items-center justify-center rounded-2xl border border-white/[0.13] bg-[#171717] text-white/50 hover:text-white">
+                <EyeOff size={16} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             {activeTab === 'projects' && (
               <>
                 {/* New Workflow Card */}
-                <form action={createBlankWorkflowAction}>
+                <form action={createBlankWorkflowAction} className="group">
                   <button
                     type="submit"
-                    className="group flex flex-col w-full aspect-video rounded-2xl border border-white/[0.06] bg-[#0d0d0d] overflow-hidden transition-all hover:border-white/20"
+                    className="flex h-[195px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#151515] transition-all hover:border-white/20"
                   >
-                    <div className="flex flex-1 items-center justify-center bg-[#0d0d0d]">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-xl text-white/30 group-hover:bg-white/10 group-hover:text-white transition-all">+</div>
-                    </div>
-                    <div className="px-5 py-4 text-left border-t border-white/[0.04]">
-                      <p className="text-[14px] font-bold text-[#F5F5F5]">New Workflow</p>
+                    <div className="flex flex-1 items-center justify-center bg-[#151515]">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-all group-hover:scale-110">
+                        <Plus size={20} strokeWidth={2.5} />
+                      </div>
                     </div>
                   </button>
+                  <p className="mt-4 px-1 text-[15px] font-semibold text-[#F5F5F5]">New Workflow</p>
                 </form>
 
-                {filteredWorkflows.map((workflow, index) => {
+                {filteredWorkflows.map((workflow) => {
                   const nodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
                   const edges = Array.isArray(workflow.edges) ? workflow.edges : [];
 
                   return (
-                    <div key={workflow.id} className="group relative flex flex-col aspect-video rounded-2xl border border-white/[0.06] bg-[#0d0d0d] overflow-hidden transition-all hover:border-white/20">
-                      <Link href={`/nodes/${workflow.id}`} className="flex-1 overflow-hidden relative">
-                        <div className="h-full w-full bg-[#080808]">
+                    <div key={workflow.id} className="group relative">
+                      <Link href={`/nodes/${workflow.id}`} className="relative block overflow-hidden rounded-2xl border border-white/[0.07] bg-[#151515] transition-all hover:border-white/20">
+                        <div className="h-[195px] w-full bg-[#121212]">
                           <WorkflowPreview nodes={nodes} edges={edges} />
                         </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent opacity-80" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#151515] via-transparent to-transparent opacity-80" />
                       </Link>
                       
-                      <div className="px-5 py-4 bg-[#0d0d0d] border-t border-white/[0.04]">
-                        <p className="truncate text-[15px] font-bold text-[#F5F5F5] tracking-tight">{workflow.name || 'Untitled'}</p>
-                        <p className="mt-1 text-[13px] text-[#999999] font-medium tracking-normal">Edited {getRelativeTimeLabel(new Date(workflow.updatedAt))}</p>
+                      <div className="px-1 pb-1 pt-4">
+                        <p className="truncate text-[15px] font-semibold tracking-tight text-[#F5F5F5]">{workflow.name || 'Untitled'}</p>
+                        <p className="mt-1 text-[13px] font-medium tracking-normal text-[#999999]">Edited {getRelativeTimeLabel(new Date(workflow.updatedAt))}</p>
                       </div>
 
                       {/* 3-dot Menu */}
-                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute right-3 top-3 opacity-0 transition-opacity group-hover:opacity-100">
                         <button 
                           onClick={(e) => {
                             e.preventDefault();
@@ -197,7 +209,7 @@ export default function NodesPageClient({ workflows }: { workflows: any[] }) {
                       </div>
 
                       {menuOpenId === workflow.id && (
-                        <div ref={menuRef} className="absolute top-12 right-4 z-50 w-40 rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-2xl p-1.5 shadow-2xl">
+                        <div ref={menuRef} className="absolute right-3 top-11 z-50 w-40 rounded-2xl border border-white/10 bg-[#161616]/95 p-1.5 shadow-2xl backdrop-blur-2xl">
                           <button onClick={() => handleAction(workflow.id, 'rename')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-bold hover:bg-white/5 transition-colors"><Edit2 size={14} className="text-white/40" /> Rename</button>
                           <button onClick={() => handleAction(workflow.id, 'duplicate')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-bold hover:bg-white/5 transition-colors"><Copy size={14} className="text-white/40" /> Duplicate</button>
                           <div className="my-1 h-[1px] bg-white/5" />
@@ -212,11 +224,11 @@ export default function NodesPageClient({ workflows }: { workflows: any[] }) {
 
             {activeTab === 'examples' && (
               <div className="col-span-full">
-                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                     <form action={createMarketingKitWorkflowAction}>
                       <button
                         type="submit"
-                        className="group flex flex-col w-full aspect-video rounded-2xl border border-white/[0.06] bg-[#0d0d0d] overflow-hidden transition-all hover:border-white/20"
+                        className="group flex h-[270px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#151515] transition-all hover:border-white/20"
                       >
                         <div className="flex flex-1 items-center justify-center bg-[#2b8dff]/5 p-6">
                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2b8dff]/10 text-[#2b8dff]">
@@ -240,7 +252,7 @@ export default function NodesPageClient({ workflows }: { workflows: any[] }) {
               <form action={createMarketingKitWorkflowAction}>
                 <button
                   type="submit"
-                  className="flex w-full items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#0d0d0d] px-5 py-4 text-left transition-all hover:border-white/20 group"
+                  className="group flex w-full items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#151515] px-5 py-4 text-left transition-all hover:border-white/20"
                 >
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2b8dff]/10 text-[#2b8dff]">
                     <Sparkles size={18} />

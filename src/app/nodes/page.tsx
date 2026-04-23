@@ -11,7 +11,13 @@ export default async function NodesPage() {
     return <NodesAuthModal />;
   }
 
-  let workflows: Array<{ id: string; name: string; updatedAt: Date }> = [];
+  let workflows: Array<{
+    id: string;
+    name: string;
+    updatedAt: Date;
+    nodes: unknown;
+    edges: unknown;
+  }> = [];
   let dbUnavailable = false;
 
   try {

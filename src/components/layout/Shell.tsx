@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
@@ -21,14 +21,21 @@ import {
   Share2,
   Sparkles,
   Sun,
-  Users,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
 export type ThemeMode = 'dark' | 'light';
 type RightPanelMode = 'assets' | 'versions';
 
-export default function Shell({ children }: { children: React.ReactNode }) {
+export default function Shell({
+  children,
+  workflowId,
+  initialWorkflowName,
+}: {
+  children: React.ReactNode;
+  workflowId?: string;
+  initialWorkflowName?: string;
+}) {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('versions');
@@ -127,7 +134,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <main className="relative flex-1">
         <header className="pointer-events-none absolute left-0 right-0 top-0 z-30 flex h-16 items-center justify-between px-6">
           <div className="pointer-events-auto flex items-center gap-2">
-            <WorkspaceMenu theme={theme} />
+            <WorkspaceMenu key={workflowId ?? 'workspace'} theme={theme} workflowId={workflowId} initialWorkflowName={initialWorkflowName} />
           </div>
 
           <div className="pointer-events-auto flex items-center gap-4">
@@ -361,23 +368,40 @@ function MenuItem({
   );
 }
 
-function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
+function WorkspaceMenu({
+  theme,
+  workflowId: workflowIdProp,
+  initialWorkflowName,
+}: {
+  theme: ThemeMode;
+  workflowId?: string;
+  initialWorkflowName?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
-  const workflowId = pathname.split('/').pop();
-  
+  const workflowIdFromPath = pathname.startsWith('/nodes/') ? pathname.split('/').pop() : undefined;
+  const workflowId = workflowIdProp ?? workflowIdFromPath;
+
   const [workspaceName, setWorkspaceName] = useState(() => {
+    if (initialWorkflowName?.trim()) {
+      return initialWorkflowName.trim();
+    }
     if (typeof window === 'undefined') return 'Untitled';
     return window.localStorage.getItem('nextflow-workspace-name') || 'Untitled';
   });
   const [menuOpen, setMenuOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isSavingName, setIsSavingName] = useState(false);
+  const lastSavedNameRef = useRef((initialWorkflowName?.trim() || 'Untitled').trim());
+  const latestNameRef = useRef((initialWorkflowName?.trim() || 'Untitled').trim());
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     window.localStorage.setItem('nextflow-workspace-name', workspaceName);
+    latestNameRef.current = workspaceName;
   }, [workspaceName]);
-  
+
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
       if (!menuRef.current) return;
@@ -388,6 +412,49 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  const persistWorkflowName = useCallback(async (nextName: string) => {
+    if (!workflowId) return;
+    const normalized = nextName.trim();
+    if (!normalized || normalized === lastSavedNameRef.current) return;
+    try {
+      setIsSavingName(true);
+      const response = await fetch('/api/workflow', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowId, name: normalized }),
+      });
+      if (response.ok) {
+        lastSavedNameRef.current = normalized;
+      }
+    } finally {
+      setIsSavingName(false);
+    }
+  }, [workflowId]);
+
+  useEffect(() => {
+    if (!workflowId) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      void persistWorkflowName(workspaceName);
+    }, 650);
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [workspaceName, workflowId, persistWorkflowName]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+      void persistWorkflowName(latestNameRef.current);
+    };
+  }, [persistWorkflowName]);
 
   const exportWorkspace = () => {
     const state = useWorkflowStore.getState();
@@ -426,12 +493,20 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
             type="text"
             value={workspaceName}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onBlur={() => {
+              setIsFocused(false);
+              void persistWorkflowName(workspaceName);
+            }}
             onChange={(e) => setWorkspaceName(e.target.value)}
             className={`h-full w-full bg-transparent px-3 text-[13px] font-bold focus:outline-none focus:ring-0 ${
               theme === 'dark' ? 'text-white' : 'text-[#0f172a]'
             }`}
           />
+          {isSavingName && (
+            <span className="pointer-events-none absolute right-2 text-[10px] text-white/40">
+              ...
+            </span>
+          )}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Prisma } from '@prisma/client';
 import { runs, tasks } from '@trigger.dev/sdk/v3';
-import { prisma } from '@/lib/prisma';
+import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow } from '@/lib/workspace-server';
 import { executeWorkflow, type NodeRunRecord, type NodeIOMap } from '@/lib/workflow-engine';
 import { executeNode as executeNodeLocal } from '@/lib/node-executor';
@@ -151,7 +151,7 @@ function getIncludedGraph(body: RunBody): { nodes: Node[]; edges: Edge[] } {
 }
 
 async function getPersistedOutputs(workflowId: string): Promise<Record<string, NodeIOMap>> {
-  const executions = await prisma.nodeExecution.findMany({
+  const executions = await withRetry(() => prisma.nodeExecution.findMany({
     where: {
       status: 'success',
       run: {
@@ -160,7 +160,7 @@ async function getPersistedOutputs(workflowId: string): Promise<Record<string, N
     },
     orderBy: { updatedAt: 'desc' },
     take: 1000,
-  });
+  }));
 
   const map: Record<string, NodeIOMap> = {};
   for (const execution of executions) {
@@ -291,13 +291,11 @@ export async function POST(request: NextRequest) {
       throw new AppError('bad_request', 'Invalid run payload.', 400);
     }
 
-    await prisma.$queryRaw`SELECT 1`;
+        const { user } = await ensureUserAndWorkflow(userId);
 
-    const { user } = await ensureUserAndWorkflow(userId);
-
-    const workflow = await prisma.workflow.findFirst({
+    const workflow = await withRetry(() => prisma.workflow.findFirst({
       where: { id: body.workflowId, userId: user.id },
-    });
+    }));
     if (!workflow) {
       throw new AppError('not_found', 'Workflow not found', 404);
     }
@@ -309,13 +307,13 @@ export async function POST(request: NextRequest) {
 
     dependencies = ensureDependencies(body, includedGraph.nodes);
 
-    const run = await prisma.workflowRun.create({
+    const run = await withRetry(() => prisma.workflowRun.create({
       data: {
         workflowId: workflow.id,
         status: 'running',
         scope: body.scope,
       },
-    });
+    }));
 
     const persistedOutputsByNodeId = body.scope === 'full' ? {} : await getPersistedOutputs(workflow.id);
 
@@ -407,7 +405,7 @@ export async function POST(request: NextRequest) {
         persistedOutputsByNodeId,
         executeNode,
         onNodeStart: async (nodeId, inputs) => {
-          const execution = await prisma.nodeExecution.create({
+          const execution = await withRetry(() => prisma.nodeExecution.create({
             data: {
               runId: run.id,
               nodeId,
@@ -415,7 +413,7 @@ export async function POST(request: NextRequest) {
               status: 'running',
               inputs: (inputs ?? {}) as Prisma.InputJsonValue,
             },
-          });
+          }));
           executionByRecordId.set(nodeId, execution.id);
         },
         onNodeFinish: async (record) => {
@@ -423,7 +421,7 @@ export async function POST(request: NextRequest) {
           const executionId = executionByRecordId.get(record.nodeId);
           if (!executionId) return;
 
-          await prisma.nodeExecution.update({
+          await withRetry(() => prisma.nodeExecution.update({
             where: { id: executionId },
             data: {
               nodeType: record.type,
@@ -432,18 +430,18 @@ export async function POST(request: NextRequest) {
               error: record.error ?? null,
               duration: new Date(record.finishedAt).getTime() - new Date(record.startedAt).getTime(),
             },
-          });
+          }));
         },
       });
 
       const duration = Date.now() - startedAt;
-      await prisma.workflowRun.update({
+      await withRetry(() => prisma.workflowRun.update({
         where: { id: run.id },
         data: {
           status: 'success',
           duration,
         },
-      });
+      }));
 
       return NextResponse.json({
         run: {
@@ -466,13 +464,13 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const duration = Date.now() - startedAt;
       const hasSuccess = nodeRuns.some((entry) => entry.status === 'success');
-      await prisma.workflowRun.update({
+      await withRetry(() => prisma.workflowRun.update({
         where: { id: run.id },
         data: {
           status: hasSuccess ? 'partial' : 'failed',
           duration,
         },
-      });
+      }));
 
       return createErrorResponse(error, dependencies);
     }

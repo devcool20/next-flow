@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow } from '@/lib/workspace-server';
 import { AppError, toAppError } from '@/lib/api-errors';
 
@@ -11,29 +11,32 @@ export async function GET(request: NextRequest) {
       throw new AppError('unauthorized', 'Unauthorized', 401);
     }
 
-    await prisma.$queryRaw`SELECT 1`;
-
     const { user } = await ensureUserAndWorkflow(userId);
     const workflowId = request.nextUrl.searchParams.get('workflowId');
     if (!workflowId) {
       throw new AppError('bad_request', 'workflowId is required', 400);
     }
 
-    const workflow = await prisma.workflow.findFirst({
-      where: { id: workflowId, userId: user.id },
-    });
+    const workflow = await withRetry(() => 
+      prisma.workflow.findFirst({
+        where: { id: workflowId, userId: user.id },
+      })
+    );
+    
     if (!workflow) {
       throw new AppError('not_found', 'Workflow not found', 404);
     }
 
-    const runs = await prisma.workflowRun.findMany({
-      where: { workflowId },
-      include: {
-        executions: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const runs = await withRetry(() => 
+      prisma.workflowRun.findMany({
+        where: { workflowId },
+        include: {
+          executions: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+    );
 
     const labelByNodeId = new Map<string, string>();
     const parsedNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
