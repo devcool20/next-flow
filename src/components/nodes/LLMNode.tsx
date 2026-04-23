@@ -101,6 +101,7 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
   return (
     <BaseNode
       id={id}
+      type="llm"
       title={String(data.label || 'LLM')}
       icon={<Brain size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}

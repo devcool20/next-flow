@@ -20,8 +20,10 @@ import { VideoUploadNode } from '../nodes/VideoUploadNode';
 import { CropNode } from '../nodes/CropNode';
 import { ExtractFrameNode } from '../nodes/ExtractFrameNode';
 import { LLMNode } from '../nodes/LLMNode';
-import { Pencil, Copy, CopyPlus, Edit2, EyeOff, Trash } from 'lucide-react';
+import { Pencil, Copy, CopyPlus, Edit2, EyeOff, Trash, Sparkles } from 'lucide-react';
 
+
+import { SmartEdge } from './SmartEdge';
 
 type CutLine = { x1: number; y1: number; x2: number; y2: number };
 const NODE_TYPES = {
@@ -32,6 +34,10 @@ const NODE_TYPES = {
   extract: ExtractFrameNode,
   llm: LLMNode,
 } as const;
+
+const EDGE_TYPES = {
+  default: SmartEdge,
+};
 
 const CUT_CURSOR =
   'url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2222%22 height=%2222%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23ef4444%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%226%22 cy=%226%22 r=%223%22/%3E%3Ccircle cx=%226%22 cy=%2218%22 r=%223%22/%3E%3Cpath d=%22M20 4L8.1 15.9%22/%3E%3Cpath d=%22M14.5 14.5L20 20%22/%3E%3C/svg%3E") 6 4, crosshair';
@@ -270,6 +276,7 @@ function WorkflowCanvasBody({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onDragOver={onDragOver}
         onDrop={onDrop}
         panOnDrag={panOnDrag}
@@ -331,6 +338,17 @@ function WorkflowCanvasBody({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-col text-[13px] font-medium text-neutral-700 dark:text-neutral-300">
+            <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-blue-500 hover:bg-blue-50 dark:text-[#3b82f6] dark:hover:bg-blue-500/10" onClick={() => {
+              // Select only this node and run
+              const state = useWorkflowStore.getState();
+              const nextNodes = state.nodes.map(n => ({ ...n, selected: n.id === contextMenu.id }));
+              useWorkflowStore.setState({ nodes: nextNodes });
+              void useWorkflowStore.getState().runSelectedWorkflow();
+              setContextMenu(null);
+            }}>
+              <span className="flex items-center gap-2"><Sparkles size={15} /> Run this node</span>
+            </button>
+            <div className="my-[2px] h-[1px] bg-neutral-100 dark:bg-white/5" />
             <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-white/5" onClick={() => {
               window.dispatchEvent(new CustomEvent('nextflow:open-editor', { detail: { id: contextMenu.id } }));
               setContextMenu(null);

@@ -24,6 +24,7 @@ export const TextNode = memo(function TextNode({ id, data, selected }: { id: str
   return (
     <BaseNode
       id={id}
+      type="text"
       title="Text"
       icon={<span className="font-serif text-[14px] leading-none -mt-0.5">I</span>}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}

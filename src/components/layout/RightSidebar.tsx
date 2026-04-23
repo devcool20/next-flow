@@ -308,6 +308,8 @@ function NodeRunItem({
                     (() => {
                       const out = nodeRun.outputs;
                       const val = typeof out.output === 'string' ? out.output : (out.image_url || out.frame_url || out.video_url || JSON.stringify(out));
+                      const isMedia = typeof val === 'string' && (val.startsWith('data:') || /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg|mp4|webm|mov)(\?|$)/i.test(val));
+                      if (isMedia) return String(val);
                       return String(val).length > 80 ? String(val).slice(0, 80) + '...' : String(val);
                     })()
                   )}
@@ -555,4 +557,3 @@ function VersionHistoryView({
     </div>
   );
 }
-

@@ -49,6 +49,7 @@ export default function Shell({
   const deleteSelectedNodes = useWorkflowStore((state) => state.deleteSelectedNodes);
   const interactionMode = useWorkflowStore((state) => state.interactionMode);
   const setInteractionMode = useWorkflowStore((state) => state.setInteractionMode);
+  const selectedCount = useWorkflowStore((state) => state.nodes.filter((n) => n.selected).length);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('nextflow-theme');
@@ -226,7 +227,23 @@ export default function Shell({
           <DockButton icon={<MousePointer2 size={16} />} active={interactionMode === 'select'} onClick={() => setInteractionMode('select')} theme={theme} tooltip="Draw Selection" tooltipShortcut="⌘" tooltipShortcutLabel="Drag" />
           <DockButton icon={<Hand size={16} />} active={interactionMode === 'pan'} onClick={() => setInteractionMode('pan')} theme={theme} tooltip="Pan Canvas" tooltipShortcut="Space" tooltipShortcutLabel="Drag" />
           <DockButton icon={<Scissors size={16} />} onClick={() => setInteractionMode('cut')} active={interactionMode === 'cut'} theme={theme} tooltip="Disconnect" tooltipShortcut="⇧" tooltipShortcutLabel="Drag" />
-          <DockButton icon={<Sparkles size={16} />} onClick={() => void runSelectedWorkflow()} theme={theme} tooltip="Run Selection" tooltipShortcut="⌘" tooltipShortcutLabel="↵" />
+          <DockButton 
+            icon={
+              <div className="relative">
+                <Sparkles size={16} />
+                {selectedCount > 0 && (
+                  <span className="absolute -right-2.5 -top-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-bold text-white shadow-sm">
+                    {selectedCount}
+                  </span>
+                )}
+              </div>
+            } 
+            onClick={() => void runSelectedWorkflow()} 
+            theme={theme} 
+            tooltip={selectedCount > 0 ? `Run ${selectedCount} selected ${selectedCount === 1 ? 'node' : 'nodes'}` : "Run Selection"} 
+            tooltipShortcut="⌘" 
+            tooltipShortcutLabel="↵" 
+          />
           <DockButton icon={<GitFork size={16} />} onClick={() => void runWorkflow()} theme={theme} tooltip="Run All Nodes" tooltipShortcut="⇧" tooltipShortcutLabel="↵" />
         </div>
 

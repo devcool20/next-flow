@@ -119,7 +119,7 @@ function nextPastStack(currentPast: { nodes: Node[]; edges: Edge[] }[], nodes: N
 function getValueKindFromHandle(handleId?: string | null): 'text' | 'image' | 'video' | 'unknown' {
   if (!handleId) return 'unknown';
   if (handleId === 'video_url') return 'video';
-  if (handleId === 'image_url' || handleId === 'images') return 'image';
+  if (handleId === 'image_url' || handleId === 'images' || handleId === 'image') return 'image';
   if (
     handleId === 'user_message' ||
     handleId === 'system_prompt' ||
@@ -207,12 +207,20 @@ function shouldPersistNodeChanges(changes: NodeChange[]) {
 }
 
 function normalizeEdgeVisual(edge: Edge): Edge {
+  const nodes = useWorkflowStore.getState().nodes;
+  const sourceKind = getSourceKind(nodes, edge.source, edge.sourceHandle);
+  const targetKind = getValueKindFromHandle(edge.targetHandle);
+  
+  const isBlue = (sourceKind === 'image' || sourceKind === 'video') || 
+                 (targetKind === 'image' || targetKind === 'video');
+
   return {
     ...edge,
     animated: false,
     type: 'default',
     style: {
       ...DEFAULT_EDGE_STYLE,
+      ...(isBlue ? { stroke: 'rgba(59, 130, 246, 0.5)' } : {}),
       ...(edge.style ?? {}),
     },
   };

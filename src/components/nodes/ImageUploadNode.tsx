@@ -28,6 +28,7 @@ export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selecte
   return (
     <BaseNode
       id={id}
+      type="image"
       title={String(data.label || 'Upload Image')}
       icon={<ImageIcon2 size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}

@@ -28,6 +28,7 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
   return (
     <BaseNode
       id={id}
+      type="video"
       title={String(data.label || 'Upload Video')}
       icon={<Film size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}

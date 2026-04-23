@@ -105,7 +105,7 @@ export default function NodesPageClient({ workflows }: { workflows: WorkflowCard
             </div>
             
             <p className="mb-12 max-w-[400px] text-[14px] font-medium leading-[1.5] tracking-[-0.004em] text-white/94">
-              Nodes is the most powerful way to operate Krea. Connect every tool and model into complex automated pipelines.
+              Nodes is the most powerful way to operate Next Flow. Connect every tool and model into complex automated pipelines.
             </p>
             
             <form action={createBlankWorkflowAction} className="mt-2">

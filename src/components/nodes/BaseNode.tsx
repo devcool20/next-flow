@@ -8,6 +8,7 @@ interface BaseNodeProps {
   title: string;
   icon: ReactNode;
   children: ReactNode;
+  type?: string;
   status?: 'idle' | 'running' | 'success' | 'error';
   inputs?: { id: string; label?: string; className?: string; top?: number | string }[];
   outputs?: { id: string; label?: string; className?: string; top?: number | string }[];
@@ -22,6 +23,7 @@ export function BaseNode({
   title,
   icon,
   children,
+  type,
   status = 'idle',
   inputs = [],
   outputs = [],
@@ -38,6 +40,8 @@ export function BaseNode({
     updateNodeInternals(id);
   }, [id, inputs, outputs, updateNodeInternals]);
 
+  const nodeType = type || (id.includes('node_') ? 'unknown' : id.split('_')[0]);
+
   return (
     <>
       <div
@@ -49,14 +53,20 @@ export function BaseNode({
         "shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:shadow-none",
         className || "w-[246px]",
         status === 'running'
-          ? "node-running"
+          ? (["image", "video", "crop", "extract"].includes(nodeType)
+            ? "node-running-blue"
+            : "node-running-yellow")
           : status === 'error'
           ? "border-red-500"
           : selected
-          ? "border-[#FFC700] shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_18px_-6px_rgba(255,199,0,0.4)] dark:border-[#FFC700] dark:shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_18px_-6px_rgba(255,199,0,0.4)]"
+          ? (["image", "video", "crop", "extract"].includes(nodeType)
+            ? "border-[#3b82f6] shadow-[0_0_0_1.5px_rgba(59,130,246,0.9),0_0_24px_-4px_rgba(59,130,246,0.5)] dark:border-[#3b82f6] dark:shadow-[0_0_0_1.5px_rgba(59,130,246,0.9),0_0_24px_-4px_rgba(59,130,246,0.5)]"
+            : "border-[#FFC700] shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_24px_-4px_rgba(255,199,0,0.5)] dark:border-[#FFC700] dark:shadow-[0_0_0_1.5px_rgba(255,199,0,0.9),0_0_24px_-4px_rgba(255,199,0,0.5)]")
           : highlighted
           ? "border-[#FFC700]/60 shadow-[0_0_0_1px_rgba(255,199,0,0.4)] dark:border-[#FFC700]/50"
-          : "border-transparent"
+          : (["image", "video", "crop", "extract"].includes(nodeType)
+            ? "border-[#3b82f6]/40 dark:border-[#3b82f6]/30"
+            : "border-transparent")
       )}
     >
       {/* Node Header (Floating Outside) */}

@@ -18,6 +18,7 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
   return (
     <BaseNode
       id={id}
+      type="crop"
       title={String(data.label || 'Crop Image')}
       icon={<Crop size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}

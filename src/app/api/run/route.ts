@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
       throw new AppError('bad_request', 'Invalid run payload.', 400);
     }
 
-        const { user } = await ensureUserAndWorkflow(userId);
+    const { user } = await ensureUserAndWorkflow(userId);
 
     const workflow = await withRetry(() => prisma.workflow.findFirst({
       where: { id: body.workflowId, userId: user.id },
@@ -321,18 +321,22 @@ export async function POST(request: NextRequest) {
     const nodeTypeById = new Map(body.nodes.map((node) => [node.id, node.type ?? 'unknown']));
     const nodeRuns: NodeRunRecord[] = [];
     const startedAt = Date.now();
-
     const fallbackNodeIds = new Set<string>();
+
     const executeNode = async (node: Node, inputs: NodeIOMap): Promise<NodeIOMap> => {
+      // High-performance path: Try local execution first for immediate response (< 3s)
+      if (ALLOW_LOCAL_FALLBACK) {
+        try {
+          return await executeNodeLocal(node, inputs);
+        } catch (localError) {
+          console.warn(`Local execution failed for ${node.id}, falling back to Trigger.dev:`, localError);
+        }
+      }
+
       const runWithFallback = async <T>(taskName: string, fn: () => Promise<T>): Promise<T> => {
         try {
           return await fn();
         } catch (error) {
-          if (ALLOW_LOCAL_FALLBACK && !FORCE_TRIGGER_ONLY && isRecoverableTriggerError(error)) {
-            dependencies.trigger = 'unavailable';
-            fallbackNodeIds.add(node.id);
-            return await executeNodeLocal(node, inputs) as T;
-          }
           throw error;
         }
       };

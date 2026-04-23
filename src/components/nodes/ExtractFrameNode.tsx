@@ -13,6 +13,7 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
   return (
     <BaseNode
       id={id}
+      type="extract"
       title={String(data.label || 'Extract Frame')}
       icon={<ImageMinus size={16} />}
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
