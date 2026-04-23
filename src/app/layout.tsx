@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -20,7 +21,9 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className="dark">
         <body className={`${inter.className} bg-zinc-950 text-slate-50 antialiased overflow-hidden`}>
-          <RouteLoadingBar />
+          <Suspense fallback={null}>
+            <RouteLoadingBar />
+          </Suspense>
           {children}
         </body>
       </html>
