@@ -2,19 +2,21 @@
 @import "@xyflow/react/dist/style.css";
 
 :root {
-  /* Global background matches Krea reference */
-  --background: #151515;
-  --foreground: #F5F5F5;
-  --dot-color: #1a1a1a;
+  --background: #F4F4F4;
+  --foreground: #0f172a;
+  --dot-color: rgba(0, 0, 0, 0.12);
   --edge-color: rgba(255, 199, 0, 0.35);
-  --node-input-bg: #111111;
-  --handle-border: #0A0A0A;
+  --node-input-bg: #FFFFFF;
+  --handle-border: #E2E8F0;
   --nodes-hero-height: 438px;
 }
 
 [data-theme="dark"] {
-  --background: #151515;
+  --background: #101010;
   --foreground: #F5F5F5;
+  --dot-color: #333333;
+  --node-input-bg: #111111;
+  --handle-border: #0A0A0A;
 }
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

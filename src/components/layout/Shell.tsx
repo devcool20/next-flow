@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { clsx } from 'clsx';
 import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
 import { Tooltip } from '../shared/Tooltip';
@@ -21,6 +22,13 @@ import {
   Share2,
   Sparkles,
   Sun,
+  X,
+  TypeIcon,
+  Brain,
+  Film,
+  Crop,
+  ImageMinus,
+  Search,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -36,17 +44,52 @@ export default function Shell({
   workflowId?: string;
   initialWorkflowName?: string;
 }) {
-  const [leftOpen, setLeftOpen] = useState(true);
+  const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
+
+  // Auto-collapse left sidebar on smaller screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setLeftOpen(false);
+      }
+    };
+    
+    // Set initial state
+    handleResize();
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('versions');
   const [rightMenuOpen, setRightMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>('dark');
+  const theme = useWorkflowStore((state) => state.theme);
+  const setTheme = useWorkflowStore((state) => state.setTheme);
   const rightMenuRef = useRef<HTMLDivElement | null>(null);
   const undoGraph = useWorkflowStore((state) => state.undoGraph);
   const redoGraph = useWorkflowStore((state) => state.redoGraph);
   const runWorkflow = useWorkflowStore((state) => state.runWorkflow);
   const runSelectedWorkflow = useWorkflowStore((state) => state.runSelectedWorkflow);
   const deleteSelectedNodes = useWorkflowStore((state) => state.deleteSelectedNodes);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const onOpenSearch = () => setIsSearchModalOpen(true);
+    window.addEventListener('nextflow:open-search', onOpenSearch);
+    return () => window.removeEventListener('nextflow:open-search', onOpenSearch);
+  }, []);
+  
+  const tools = [
+    { type: 'text', icon: <TypeIcon size={16} />, label: 'Text', color: 'text-blue-400', bgColor: 'bg-blue-500/15' },
+    { type: 'image', icon: <ImageIcon size={16} />, label: 'Image', color: 'text-fuchsia-400', bgColor: 'bg-fuchsia-500/15' },
+    { type: 'video', icon: <Film size={16} />, label: 'Video', color: 'text-amber-400', bgColor: 'bg-amber-500/15' },
+    { type: 'llm', icon: <Brain size={16} />, label: 'LLM', color: 'text-emerald-400', bgColor: 'bg-emerald-500/15' },
+    { type: 'crop', icon: <Crop size={16} />, label: 'Crop', color: 'text-yellow-400', bgColor: 'bg-yellow-500/15' },
+    { type: 'extract', icon: <ImageMinus size={16} />, label: 'Extract', color: 'text-cyan-400', bgColor: 'bg-cyan-500/15' },
+  ].filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
+
   const interactionMode = useWorkflowStore((state) => state.interactionMode);
   const setInteractionMode = useWorkflowStore((state) => state.setInteractionMode);
   const selectedCount = useWorkflowStore((state) => state.nodes.filter((n) => n.selected).length);
@@ -125,14 +168,12 @@ export default function Shell({
 
   return (
     <div
-      data-theme={theme}
-      className={`nextflow-shell relative flex h-screen w-screen overflow-hidden ${
-        theme === 'dark' ? 'bg-[#0A0A0A] text-white' : 'bg-[#eff3f8] text-[#0f172a]'
-      }`}
+      data-theme={theme || 'dark'}
+      className={`nextflow-shell relative flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]`}
     >
       <LeftSidebar isOpen={leftOpen} theme={theme} onToggle={() => setLeftOpen((prev) => !prev)} />
 
-      <main className="relative flex-1">
+      <main className="relative flex-1 min-w-0 h-full overflow-hidden">
         <header className="pointer-events-none absolute left-0 right-0 top-0 z-30 flex h-16 items-center justify-between px-6">
           <div className="pointer-events-auto flex items-center gap-2">
             <WorkspaceMenu key={workflowId ?? 'workspace'} theme={theme} workflowId={workflowId} initialWorkflowName={initialWorkflowName} />
@@ -141,7 +182,7 @@ export default function Shell({
           <div className="pointer-events-auto flex items-center gap-4">
             <IconGhostButton
               icon={theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
-              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               active
               theme={theme}
               tooltip="Toggle Theme"
@@ -214,25 +255,25 @@ export default function Shell({
         </div>
 
         <div
-          className={`absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-[1.25rem] border p-2 transition-all ${
+          className={`absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-[1rem] border p-1 transition-all ${
             theme === 'dark' ? 'border-white/10 bg-[#1a1a1a]/95 shadow-2xl' : 'border-neutral-200/50 bg-white/80 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.04)]'
           }`}
         >
           <DockButton
-            icon={<Plus size={16} />}
+            icon={<Plus size={19} />}
             onClick={() => window.dispatchEvent(new CustomEvent('nextflow:add-node', { detail: { type: 'text' } }))}
             theme={theme}
             tooltip="Add Node"
           />
-          <DockButton icon={<MousePointer2 size={16} />} active={interactionMode === 'select'} onClick={() => setInteractionMode('select')} theme={theme} tooltip="Draw Selection" tooltipShortcut="⌘" tooltipShortcutLabel="Drag" />
-          <DockButton icon={<Hand size={16} />} active={interactionMode === 'pan'} onClick={() => setInteractionMode('pan')} theme={theme} tooltip="Pan Canvas" tooltipShortcut="Space" tooltipShortcutLabel="Drag" />
-          <DockButton icon={<Scissors size={16} />} onClick={() => setInteractionMode('cut')} active={interactionMode === 'cut'} theme={theme} tooltip="Disconnect" tooltipShortcut="⇧" tooltipShortcutLabel="Drag" />
+          <DockButton icon={<MousePointer2 size={19} />} active={interactionMode === 'select'} onClick={() => setInteractionMode('select')} theme={theme} tooltip="Draw Selection" tooltipShortcut="⌘" tooltipShortcutLabel="Drag" />
+          <DockButton icon={<Hand size={19} />} active={interactionMode === 'pan'} onClick={() => setInteractionMode('pan')} theme={theme} tooltip="Pan Canvas" tooltipShortcut="Space" tooltipShortcutLabel="Drag" />
+          <DockButton icon={<Scissors size={19} />} onClick={() => setInteractionMode('cut')} active={interactionMode === 'cut'} theme={theme} tooltip="Disconnect" tooltipShortcut="⇧" tooltipShortcutLabel="Drag" />
           <DockButton 
             icon={
               <div className="relative">
-                <Sparkles size={16} />
+                <Sparkles size={19} />
                 {selectedCount > 0 && (
-                  <span className="absolute -right-2.5 -top-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-bold text-white shadow-sm">
+                  <span className="absolute -right-3 -top-3 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-bold text-white shadow-sm">
                     {selectedCount}
                   </span>
                 )}
@@ -244,13 +285,57 @@ export default function Shell({
             tooltipShortcut="⌘" 
             tooltipShortcutLabel="↵" 
           />
-          <DockButton icon={<GitFork size={16} />} onClick={() => void runWorkflow()} theme={theme} tooltip="Run All Nodes" tooltipShortcut="⇧" tooltipShortcutLabel="↵" />
+          <DockButton icon={<GitFork size={19} />} onClick={() => void runWorkflow()} theme={theme} tooltip="Run All Nodes" tooltipShortcut="⇧" tooltipShortcutLabel="↵" />
         </div>
 
 
       </main>
 
       <RightSidebar isOpen={rightOpen} mode={rightPanelMode} theme={theme} />
+
+      {isSearchModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setIsSearchModalOpen(false)}>
+          <div className={clsx("w-[480px] overflow-hidden rounded-2xl border shadow-2xl", theme === 'dark' ? "border-white/10 bg-[#121316]" : "border-neutral-200 bg-white")} onClick={e => e.stopPropagation()}>
+            <div className={clsx("flex items-center px-4 pt-4 pb-2 border-b", theme === 'dark' ? "border-white/5" : "border-black/5")}>
+              <Search className="mr-3 text-[#5f6a7d]" size={20} />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search tools..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={clsx("flex-1 bg-transparent text-xl font-medium focus:outline-none", theme === 'dark' ? "text-white" : "text-[#0f172a]")}
+              />
+              <button onClick={() => setIsSearchModalOpen(false)} className={clsx("rounded-md p-1 transition-colors", theme === 'dark' ? "hover:bg-white/5" : "hover:bg-black/5")}>
+                <X size={18} className="text-neutral-500" />
+              </button>
+            </div>
+            <div className="max-h-[300px] overflow-y-auto p-2 custom-scrollbar">
+              {tools.map(tool => (
+                <div 
+                  key={tool.type} 
+                  className={clsx("flex cursor-pointer items-center gap-4 rounded-xl p-3 transition-colors", theme === 'dark' ? "hover:bg-white/5" : "hover:bg-black/5")} 
+                  onClick={() => { 
+                    window.dispatchEvent(new CustomEvent('nextflow:add-node', { detail: { type: tool.type } })); 
+                    setIsSearchModalOpen(false); 
+                  }}
+                >
+                  <div className={clsx("flex h-12 w-12 items-center justify-center rounded-xl shadow-sm", tool.bgColor, tool.color)}>
+                    {tool.icon}
+                  </div>
+                  <div>
+                    <div className={clsx("font-semibold", theme === 'dark' ? "text-white" : "text-[#0f172a]")}>{tool.label}</div>
+                    <div className={clsx("text-xs opacity-50")}>Add {tool.label} node to canvas</div>
+                  </div>
+                </div>
+              ))}
+              {tools.length === 0 && (
+                <div className="py-8 text-center text-sm opacity-30">No tools found matching &quot;{searchQuery}&quot;</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -335,10 +420,10 @@ function DockButton({
   const btn = (
     <button
       onClick={onClick}
-      className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
+      className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
         theme === 'dark'
           ? active
-            ? 'bg-white/10 text-white'
+            ? 'bg-white/10 text-white shadow-inner'
             : 'text-[#8e8e8e] hover:bg-white/5 hover:text-white'
           : active
             ? 'bg-[#e8edf5] text-[#0f172a]'
@@ -489,17 +574,17 @@ function WorkspaceMenu({
   return (
     <div className="relative flex items-center" ref={menuRef}>
       <div
-        className={`flex h-9 items-center rounded-xl border transition-all duration-300 ${
-          theme === 'dark' ? 'border-white/10 bg-black shadow-[0_4px_12px_rgba(0,0,0,0.5)]' : 'border-[#d6dde9] bg-white text-[#0f172a] shadow-sm'
+        className={`flex h-11 items-center rounded-2xl border transition-all duration-300 p-1.5 ${
+          theme === 'dark' ? 'border-white/10 bg-[#202020] shadow-[0_8px_24px_rgba(0,0,0,0.5)]' : 'border-[#d6dde9] bg-white text-[#0f172a] shadow-sm'
         }`}
       >
         <button
           onClick={() => setMenuOpen((prev) => !prev)}
-          className={`flex h-full items-center justify-center gap-1.5 rounded-l-xl px-2.5 transition-colors ${
+          className={`flex h-full items-center justify-center gap-2 rounded-xl px-2 transition-colors ${
             theme === 'dark' ? 'text-white/60 hover:bg-white/5 hover:text-white' : 'text-[#5f6f88] hover:bg-[#f1f4f9] hover:text-[#0f172a]'
           }`}
         >
-          <div className="flex h-[20px] w-[20px] items-center justify-center rounded bg-white text-[10px] font-black text-black">
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-[11px] font-black text-black shadow-sm">
             N
           </div>
           <ChevronDown size={12} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />

@@ -26,21 +26,10 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
   const persistWorkflowNow = useWorkflowStore((state) => state.persistWorkflowNow);
   const router = useRouter();
   const pathname = usePathname();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
-
-  const tools = [
-    { type: 'text', icon: <TypeIcon size={16} />, label: 'Text', color: 'text-[#58a6ff]', bgColor: 'bg-[#58a6ff]/15' },
-    { type: 'image', icon: <ImageIcon size={16} />, label: 'Image', color: 'text-[#e879f9]', bgColor: 'bg-[#e879f9]/15' },
-    { type: 'video', icon: <Film size={16} />, label: 'Video', color: 'text-[#f59e0b]', bgColor: 'bg-[#f59e0b]/15' },
-    { type: 'llm', icon: <Brain size={16} />, label: 'LLM', color: 'text-[#10b981]', bgColor: 'bg-[#10b981]/15' },
-    { type: 'crop', icon: <Crop size={16} />, label: 'Crop', color: 'text-[#facc15]', bgColor: 'bg-[#facc15]/15' },
-    { type: 'extract', icon: <ImageMinus size={16} />, label: 'Extract', color: 'text-[#06b6d4]', bgColor: 'bg-[#06b6d4]/15' },
-  ].filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleSearchClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsSearchModalOpen(true);
+    window.dispatchEvent(new CustomEvent('nextflow:open-search'));
   };
 
   const handleNodeEditorNavigate = async () => {
@@ -122,53 +111,27 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
              </div>
              {isOpen && (
                <div className="flex flex-col min-w-0">
-                 <span className="text-[13px] font-medium truncate text-white/90">User Name</span>
-                 <span className="text-[11px] text-white/40">Free</span>
+                  <span className={clsx("text-[13px] font-medium truncate", theme === 'dark' ? "text-white/90" : "text-[#0f172a]")}>User Name</span>
+                  <span className={clsx("text-[11px]", theme === 'dark' ? "text-white/40" : "text-[#5f6f88]")}>Free</span>
                </div>
              )}
           </div>
         </div>
       </div>
 
-      {isSearchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setIsSearchModalOpen(false)}>
-          <div className={clsx("w-[480px] overflow-hidden rounded-2xl border shadow-2xl", theme === 'dark' ? "border-[#2a2a2a] bg-[#1A1A1A]" : "border-neutral-200 bg-white")} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center px-4 pt-4 pb-2 border-b border-transparent">
-              <Search className="mr-3 text-[#5f6a7d]" size={20} />
-              <input
-                type="text"
-                autoFocus
-                placeholder="Search tools..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent text-xl font-medium focus:outline-none"
-                style={{ color: theme === 'dark' ? '#fff' : '#000' }}
-              />
-              <button onClick={() => setIsSearchModalOpen(false)} className="rounded-md p-1 hover:bg-neutral-500/20"><X size={18} className="text-neutral-500" /></button>
-            </div>
-            <div className="max-h-[300px] overflow-y-auto p-2 scrollbar-none">
-              {tools.map(tool => (
-                <div key={tool.type} className={clsx("flex cursor-pointer items-center gap-4 rounded-xl p-3 hover:bg-black/5 dark:hover:bg-white/5")} onClick={() => { window.dispatchEvent(new CustomEvent('nextflow:add-node', { detail: { type: tool.type } })); setIsSearchModalOpen(false); }}>
-                  <div className={clsx("flex h-12 w-12 items-center justify-center rounded-xl", tool.bgColor, tool.color)}>{tool.icon}</div>
-                  <div>
-                    <div className={clsx("font-semibold", theme === 'dark' ? "text-white" : "text-black")}>{tool.label}</div>
-                    <div className="text-xs text-neutral-500">Add {tool.label} node to canvas</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
 
 function SectionTitle({ children, isOpen, action }: { children: ReactNode; isOpen: boolean; action?: ReactNode }) {
+  const theme = useWorkflowStore((state) => state.theme);
   if (!isOpen) return <div className="mb-1 mt-1 h-[1px] bg-white/5 mx-2" />;
   return (
     <div className="mb-1 mt-3 px-3 flex items-center h-8">
-      <h3 className="whitespace-nowrap text-[11px] font-medium uppercase tracking-[0.1em] text-white/30">
+      <h3 className={clsx(
+        "whitespace-nowrap text-[11px] font-medium uppercase tracking-[0.1em]",
+        theme === 'dark' ? "text-white/30" : "text-black/30"
+      )}>
         {children}
       </h3>
       {action && <div className="ml-auto text-neutral-500 flex items-center">{action}</div>}

@@ -317,6 +317,28 @@ export async function POST(request: NextRequest) {
 
     const persistedOutputsByNodeId = body.scope === 'full' ? {} : await getPersistedOutputs(workflow.id);
 
+    // High-performance optimization: pre-populate outputs for static nodes (text, image, video)
+    // from their current data. This allows downstream nodes to run even if the static node 
+    // hasn't been explicitly "executed" yet in a previous run.
+    for (const node of body.nodes) {
+      if (node.type === 'text') {
+        persistedOutputsByNodeId[node.id] = { 
+          ...persistedOutputsByNodeId[node.id], 
+          output: String(node.data?.value ?? '') 
+        };
+      } else if (node.type === 'image' && node.data?.imageUrl) {
+        persistedOutputsByNodeId[node.id] = { 
+          ...persistedOutputsByNodeId[node.id], 
+          image_url: String(node.data.imageUrl) 
+        };
+      } else if (node.type === 'video' && node.data?.videoUrl) {
+        persistedOutputsByNodeId[node.id] = { 
+          ...persistedOutputsByNodeId[node.id], 
+          video_url: String(node.data.videoUrl) 
+        };
+      }
+    }
+
     const executionByRecordId = new Map<string, string>();
     const nodeTypeById = new Map(body.nodes.map((node) => [node.id, node.type ?? 'unknown']));
     const nodeRuns: NodeRunRecord[] = [];

@@ -218,17 +218,17 @@ export default function RightSidebar({ isOpen, mode, theme = 'dark' }: { isOpen:
         theme === 'dark'
           ? 'border-[#222222] bg-[#0b0d10]'
           : 'border-neutral-200/70 bg-white/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md',
-        isOpen ? 'w-[22rem]' : 'w-0 overflow-hidden'
+        isOpen ? 'w-full sm:w-[22rem]' : 'w-0 overflow-hidden'
       )}
     >
-      <div className={clsx('flex min-w-[22rem] items-center justify-between border-b px-4 py-4', theme === 'dark' ? 'border-[#1f242b]' : 'border-[#e2e8f0]')}>
+      <div className={clsx('flex sm:min-w-[22rem] min-w-0 items-center justify-between border-b px-4 py-4', theme === 'dark' ? 'border-[#1f242b]' : 'border-[#e2e8f0]')}>
         <div className={clsx('flex items-center gap-2', theme === 'dark' ? 'text-[#e5ebf6]' : 'text-[#0f172a]')}>
           {mode === 'assets' ? <ImageIcon className="h-4 w-4" /> : <History className="h-4 w-4" />}
           <span className="text-sm font-semibold">{mode === 'assets' ? 'Asset History' : 'Version History'}</span>
         </div>
       </div>
 
-      <div className="custom-scrollbar flex min-w-[22rem] flex-1 flex-col overflow-y-auto p-4">
+      <div className="custom-scrollbar flex sm:min-w-[22rem] min-w-0 flex-1 flex-col overflow-y-auto p-4">
         {mode === 'assets' ? (
           <AssetHistoryView assets={assets} theme={theme} />
         ) : (

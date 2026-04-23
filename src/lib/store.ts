@@ -87,6 +87,8 @@ type WorkflowState = {
   setInteractionMode: (mode: InteractionMode) => void;
   removeEdgeById: (edgeId: string) => void;
   setEditingTextNodeId: (nodeId: string | null) => void;
+  theme: 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
 };
 
 const MAX_GRAPH_HISTORY = 100;
@@ -270,6 +272,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workflowId: null,
   history: [],
   activeRunId: null,
+  theme: 'dark',
+  setTheme: (theme) => set({ theme }),
   onNodesChange: (changes: NodeChange[]) => {
     const state = get();
     const nextNodes = applyNodeChanges(changes, state.nodes);

@@ -24,6 +24,7 @@ import { Pencil, Copy, CopyPlus, Edit2, EyeOff, Trash, Sparkles } from 'lucide-r
 
 
 import { SmartEdge } from './SmartEdge';
+import { NodeSelector, type NodeType } from './NodeSelector';
 
 type CutLine = { x1: number; y1: number; x2: number; y2: number };
 const NODE_TYPES = {
@@ -77,11 +78,20 @@ function WorkflowCanvasBody({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   
   const [contextMenu, setContextMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+  const [nodeSelector, setNodeSelector] = useState<{ x: number; y: number } | null>(null);
+  const lastMousePos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const handleGlobalClick = () => setContextMenu(null);
+    const handleMouseMove = (e: MouseEvent) => {
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+    };
     document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
   }, []);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -160,7 +170,25 @@ function WorkflowCanvasBody({
       addNodeAtPosition(type, position);
     };
     window.addEventListener('nextflow:add-node', onAddNode as EventListener);
-    return () => window.removeEventListener('nextflow:add-node', onAddNode as EventListener);
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        setNodeSelector({ x: lastMousePos.current.x, y: lastMousePos.current.y });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('nextflow:add-node', onAddNode as EventListener);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [addNodeAtPosition, screenToFlowPosition]);
 
   // Determine if a cut line slices through an edge path using SVG DOM
@@ -248,6 +276,12 @@ function WorkflowCanvasBody({
       onMouseMove={handleCanvasMouseMove}
       onMouseUp={handleCanvasMouseUp}
       onMouseLeave={handleCanvasMouseUp}
+      onDoubleClick={(e) => {
+        // Only trigger on the pane, not on nodes or controls
+        const target = e.target as HTMLElement;
+        if (target.closest('.react-flow__node') || target.closest('.react-flow__controls')) return;
+        setNodeSelector({ x: e.clientX, y: e.clientY });
+      }}
     >
       {/* Red cut-line SVG overlay */}
       {cutMode && cutLine && (
@@ -267,6 +301,16 @@ function WorkflowCanvasBody({
           />
           <circle cx={cutLine.x2} cy={cutLine.y2} r={5} fill="#ef4444" opacity={0.8} />
         </svg>
+      )}
+
+      {/* Empty State Overlay */}
+      {nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-center select-none animate-in fade-in duration-700">
+          <h2 className="text-[22px] font-medium text-[var(--foreground)] opacity-40 tracking-tight">Add a node</h2>
+          <p className="mt-1 text-sm text-[var(--foreground)] opacity-20 font-light">
+            Double click, right click, or press <kbd className="rounded border border-black/5 bg-black/5 dark:border-white/5 dark:bg-white/5 px-1.5 py-0.5 text-[11px] font-medium text-[var(--foreground)] opacity-40 shadow-sm ml-0.5">N</kbd>
+          </p>
+        </div>
       )}
 
       <ReactFlow
@@ -293,6 +337,10 @@ function WorkflowCanvasBody({
           });
         }}
         onPaneClick={() => setContextMenu(null)}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          setNodeSelector({ x: event.clientX, y: event.clientY });
+        }}
         onEdgeClick={(_, edge) => {
           if (!cutMode) return;
           removeEdgeById(edge.id);
@@ -312,7 +360,7 @@ function WorkflowCanvasBody({
         fitView
         className="bg-[var(--background)]"
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={0.8} color="var(--dot-color)" />
+        <Background variant={BackgroundVariant.Dots} gap={28} size={1.2} color="var(--dot-color)" />
         <Controls 
           className="nextflow-controls !bottom-3 !right-3 !z-30 !bg-[#1a1a1a]/95 backdrop-blur-md !border !border-white/10 !text-[#8e8e8e] !rounded-xl overflow-hidden shadow-2xl [&>button]:!border-white/5 [&>button]:hover:!bg-white/10 [&>button]:hover:!text-white [&>button]:transition-colors" 
           position="bottom-right" 
@@ -451,6 +499,21 @@ function WorkflowCanvasBody({
             />
           </div>
         </div>
+      )}
+
+      {nodeSelector && (
+        <NodeSelector
+          position={nodeSelector}
+          onClose={() => setNodeSelector(null)}
+          onSelect={(type: NodeType) => {
+            const position = screenToFlowPosition({
+              x: nodeSelector.x,
+              y: nodeSelector.y,
+            });
+            addNodeAtPosition(type, position);
+            setNodeSelector(null);
+          }}
+        />
       )}
     </div>
   );
