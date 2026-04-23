@@ -6,4 +6,17 @@ export default defineConfig({
   maxDuration: 300,
   logLevel: "info",
   dirs: ["./src/trigger"],
+  build: {
+    extensions: [
+      {
+        name: "ffmpeg",
+        onBuild: (context) => {
+          context.addInstructions({
+            type: "run",
+            command: "apt-get update && apt-get install -y ffmpeg",
+          });
+        },
+      },
+    ],
+  },
 });
