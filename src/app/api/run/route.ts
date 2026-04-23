@@ -26,7 +26,7 @@ type DependencyState = {
 const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro']);
 const FORCE_TRIGGER_ONLY = process.env.NEXTFLOW_FORCE_TRIGGER_ONLY === 'true';
 const ALLOW_LOCAL_FALLBACK =
-  (process.env.NEXTFLOW_ALLOW_LOCAL_FALLBACK ?? (process.env.NODE_ENV === 'production' ? 'false' : 'true')) === 'true';
+  (process.env.NEXTFLOW_ALLOW_LOCAL_FALLBACK ?? (process.env.TRIGGER_SECRET_KEY ? 'false' : 'true')) === 'true';
 
 function isNodeDisabled(node: Node): boolean {
   return Boolean(node.data?.disabled);
