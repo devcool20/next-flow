@@ -481,6 +481,7 @@ function WorkspaceMenu({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const workflowIdFromPath = pathname.startsWith('/nodes/') ? pathname.split('/').pop() : undefined;
   const workflowId = workflowIdProp ?? workflowIdFromPath;
 
@@ -571,6 +572,28 @@ function WorkspaceMenu({
     setMenuOpen(false);
   };
 
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+        if (data.nodes && data.edges) {
+          useWorkflowStore.getState().setNodes(data.nodes);
+          useWorkflowStore.getState().setEdges(data.edges);
+          setMenuOpen(false);
+        }
+      } catch (error) {
+        console.error('Failed to import workflow:', error);
+        alert('Invalid JSON file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="relative flex items-center" ref={menuRef}>
       <div
@@ -589,6 +612,13 @@ function WorkspaceMenu({
           </div>
           <ChevronDown size={12} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
         </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept=".json"
+          onChange={handleImport}
+        />
         <div className={`h-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
         <div className={`relative flex items-center overflow-hidden transition-all duration-300 ease-out ${isFocused ? 'w-48' : 'w-24'}`}>
           <input
@@ -624,7 +654,7 @@ function WorkspaceMenu({
           </div>
           <MenuItem icon={<div className="pl-1 text-xs font-bold">&larr;</div>} label="Back to Nodes" shortcut="" onClick={() => router.push('/nodes')} theme={theme} />
           <MenuItem icon={<Sparkles size={15} />} label="Turn into App" shortcut="" onClick={() => {}} theme={theme} />
-          <MenuItem icon={<Share2 size={15} />} label="Import" shortcut="" onClick={() => {}} theme={theme} />
+          <MenuItem icon={<Share2 size={15} />} label="Import" shortcut="" onClick={() => fileInputRef.current?.click()} theme={theme} />
           <MenuItem icon={<Share2 size={15} className="rotate-180" />} label="Export" shortcut="" onClick={exportWorkspace} theme={theme} />
         </div>
       )}

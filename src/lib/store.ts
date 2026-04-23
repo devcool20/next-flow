@@ -408,22 +408,56 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
       const run = payload.run;
       const nextHistory = dedupeRuns([run, ...get().history]);
+
+      // --- Progressive UI Simulation ---
+      // 1. Initial state: Set all involved nodes to idle/waiting
+      set({
+        nodes: get().nodes.map((node) => ({
+          ...node,
+          data: { ...node.data, status: 'idle', highlighted: false },
+        })),
+      });
+
+      // 2. Sort node runs by start time to follow execution order
+      const sortedRuns = [...run.nodeRuns].sort(
+        (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+      );
+
+      // 3. Sequentially update each node's status to mimic real-time progress
+      for (const runEntry of sortedRuns) {
+        // Set to running
+        set({
+          nodes: get().nodes.map((node) =>
+            node.id === runEntry.nodeId ? { ...node, data: { ...node.data, status: 'running' } } : node
+          ),
+        });
+
+        // Simulate wait (limit to 600ms for responsiveness, but enough to see the glow)
+        const duration = new Date(runEntry.finishedAt).getTime() - new Date(runEntry.startedAt).getTime();
+        await new Promise((resolve) => setTimeout(resolve, Math.min(duration, 600)));
+
+        // Set to final state
+        set({
+          nodes: get().nodes.map((node) =>
+            node.id === runEntry.nodeId
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    highlighted: run.executionPath.includes(node.id),
+                    ...(runEntry.outputs || {}),
+                    status: runEntry.status,
+                  },
+                }
+              : node
+          ),
+        });
+      }
+
       set({
         isRunning: false,
         history: nextHistory,
         activeRunId: run.id,
-        nodes: get().nodes.map((node) => {
-          const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              highlighted: run.executionPath.includes(node.id),
-              ...(runEntry?.outputs ? runEntry.outputs : {}),
-              status: runEntry?.status ?? node.data?.status,
-            },
-          };
-        }),
       });
       void get().fetchRuns();
     } catch {
@@ -472,22 +506,42 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const run = payload.run;
       const nextHistory = dedupeRuns([run, ...get().history]);
 
+      // --- Progressive UI Simulation (Partial) ---
+      const sortedRuns = [...run.nodeRuns].sort(
+        (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+      );
+
+      for (const runEntry of sortedRuns) {
+        set({
+          nodes: get().nodes.map((node) =>
+            node.id === runEntry.nodeId ? { ...node, data: { ...node.data, status: 'running' } } : node
+          ),
+        });
+
+        const duration = new Date(runEntry.finishedAt).getTime() - new Date(runEntry.startedAt).getTime();
+        await new Promise((resolve) => setTimeout(resolve, Math.min(duration, 500)));
+
+        set({
+          nodes: get().nodes.map((node) =>
+            node.id === runEntry.nodeId
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    highlighted: run.executionPath.includes(node.id),
+                    ...(runEntry.outputs || {}),
+                    status: runEntry.status,
+                  },
+                }
+              : node
+          ),
+        });
+      }
+
       set({
         isRunning: false,
         history: nextHistory,
         activeRunId: run.id,
-        nodes: get().nodes.map((node) => {
-          const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              highlighted: run.executionPath.includes(node.id),
-              ...(runEntry?.outputs ? runEntry.outputs : {}),
-              status: runEntry?.status ?? node.data?.status,
-            },
-          };
-        }),
       });
       void get().fetchRuns();
     } catch {

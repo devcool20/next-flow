@@ -18,6 +18,7 @@ import {
 import LeftSidebar from '@/components/layout/LeftSidebar';
 import { WorkflowPreview } from '@/components/nodes/WorkflowPreview';
 import { deleteWorkflowAction, renameWorkflowAction, duplicateWorkflowAction, createBlankWorkflowAction, createMarketingKitWorkflowAction } from './actions';
+import { workflowSamples } from '@/lib/samples';
 
 type TabId = 'projects' | 'apps' | 'examples' | 'templates';
 
@@ -248,22 +249,29 @@ export default function NodesPageClient({ workflows }: { workflows: WorkflowCard
 
           <div className="mt-20">
             <h3 className="mb-6 text-[12px] font-bold text-[#999999] uppercase tracking-[0.1em]">Templates</h3>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <form action={createMarketingKitWorkflowAction}>
-                <button
-                  type="submit"
-                  className="group flex w-full items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#151515] px-5 py-4 text-left transition-all hover:border-white/20"
-                >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2b8dff]/10 text-[#2b8dff]">
-                    <Sparkles size={18} />
-                  </div>
-                  <div>
-                    <div className="text-[14px] font-bold text-[#F5F5F5]">Marketing Kit</div>
-                    <div className="text-[12px] text-[#999999]">Automated pipeline</div>
-                  </div>
-                  <Wand2 size={16} className="ml-auto text-white/10 group-hover:text-white/40 transition-colors" />
-                </button>
-              </form>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+              {workflowSamples.map((sample) => (
+                <form key={sample.id} action={createMarketingKitWorkflowAction} className="group relative">
+                  <button
+                    type="submit"
+                    className="relative block w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-[#151515] transition-all hover:border-white/20 text-left"
+                  >
+                    <div className="h-[195px] w-full bg-[#121212]">
+                      <WorkflowPreview nodes={sample.nodes} edges={sample.edges} />
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#151515] via-transparent to-transparent opacity-80" />
+                    
+                    <div className="px-4 pb-4 pt-4 relative">
+                      <p className="truncate text-[15px] font-semibold tracking-tight text-[#F5F5F5]">{sample.name}</p>
+                      <p className="mt-1 text-[13px] font-medium tracking-normal text-[#999999]">{sample.description.split('.')[0]}.</p>
+                    </div>
+
+                    <div className="absolute right-3 bottom-3 h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/40 opacity-0 group-hover:opacity-100 transition-all flex">
+                      <Plus size={16} />
+                    </div>
+                  </button>
+                </form>
+              ))}
             </div>
           </div>
         </section>

@@ -27,7 +27,7 @@ const productMarketingKitSample: WorkflowSample = {
     {
       id: 'node_crop',
       type: 'crop',
-      position: { x: 350, y: 50 },
+      position: { x: 450, y: 50 },
       data: { label: 'Focus Crop', x_percent: '10', y_percent: '10', width_percent: '80', height_percent: '80' },
     },
     
@@ -44,7 +44,7 @@ const productMarketingKitSample: WorkflowSample = {
     {
       id: 'node_text_details',
       type: 'text',
-      position: { x: 350, y: 300 },
+      position: { x: 450, y: 320 },
       data: { 
         label: 'Product Specs', 
         value: 'Product: Wireless Bluetooth Headphones. Features: Noise cancellation, 30-hour battery, foldable design.' 
@@ -55,7 +55,7 @@ const productMarketingKitSample: WorkflowSample = {
     {
       id: 'node_llm_1',
       type: 'llm',
-      position: { x: 700, y: 150 },
+      position: { x: 850, y: 150 },
       data: { 
         label: 'Draft Description', 
         model: 'gemini-2.5-flash'
@@ -75,7 +75,7 @@ const productMarketingKitSample: WorkflowSample = {
     {
       id: 'node_extract',
       type: 'extract',
-      position: { x: 350, y: 550 },
+      position: { x: 450, y: 600 },
       data: { label: 'Extract Hero Frame', timestamp: '50%' },
     },
 
@@ -83,7 +83,7 @@ const productMarketingKitSample: WorkflowSample = {
     {
       id: 'node_text_final_instr',
       type: 'text',
-      position: { x: 700, y: 500 },
+      position: { x: 850, y: 550 },
       data: { 
         label: 'Final Instructions', 
         value: 'You are a social media manager. Create a tweet-length marketing post based on the product image and video frame.' 
@@ -92,7 +92,7 @@ const productMarketingKitSample: WorkflowSample = {
     {
       id: 'node_llm_2',
       type: 'llm',
-      position: { x: 1100, y: 300 },
+      position: { x: 1250, y: 350 },
       data: { 
         label: 'Final Marketing Summary', 
         model: 'gemini-2.5-flash'

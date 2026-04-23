@@ -26,10 +26,10 @@ export function Tooltip({ children, content, shortcut, shortcutLabel, side = 'to
   };
 
   return (
-    <div className={clsx("group relative flex items-center justify-center", className)}>
+    <div className={clsx("group/tooltip relative flex items-center justify-center", className)}>
       {children}
       <div className={clsx(
-        "pointer-events-none absolute z-[9999] flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-200", 
+        "pointer-events-none absolute z-[9999] flex items-center opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 delay-200", 
         positioning[side]
       )}>
         <div className="relative flex items-center bg-white px-3 py-1.5 rounded-[10px] shadow-[0_4px_16px_rgba(0,0,0,0.15)] ring-1 ring-black/5 dark:ring-white/10 dark:shadow-[0_4px_16px_rgba(0,0,0,0.5)]">
