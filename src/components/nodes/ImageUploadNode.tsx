@@ -33,6 +33,7 @@ export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selecte
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
       highlighted={Boolean(data.highlighted)}
+      inputs={[]}
       outputs={[{ id: 'image_url', label: 'image', className: 'handle-blue' }]}
     >
       <div className="flex flex-col gap-3 h-full">

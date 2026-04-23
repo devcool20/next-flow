@@ -2,30 +2,103 @@ import { Brain, ChevronDown, ChevronRight, Pencil, Image as ImageIcon } from 'lu
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
 import ReactMarkdown from 'react-markdown';
-import { memo, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 type NodeData = Record<string, unknown>;
+type HandleTopState = {
+  output: number;
+  user_message: number;
+  images: number;
+  system_prompt: number;
+};
 
-export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
+const DEFAULT_TOPS: HandleTopState = {
+  output: 264,
+  user_message: 274,
+  images: 412,
+  system_prompt: 512,
+};
+
+export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: string; data: NodeData; selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const hasInputConnection = useWorkflowStore((state) => state.hasInputConnection);
   const systemLinked = hasInputConnection(id, 'system_prompt');
   const userLinked = hasInputConnection(id, 'user_message');
   const imagesLinked = hasInputConnection(id, 'images');
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [tops, setTops] = useState<HandleTopState>(DEFAULT_TOPS);
 
-  // Define handles with explicit top offsets to align with the visual rows
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const outputLabelRef = useRef<HTMLDivElement | null>(null);
+  const promptRowRef = useRef<HTMLDivElement | null>(null);
+  const imageRowRef = useRef<HTMLDivElement | null>(null);
+  const settingsRowRef = useRef<HTMLButtonElement | null>(null);
+  const systemPromptRowRef = useRef<HTMLDivElement | null>(null);
+
+  const getCenterTop = useCallback((root: HTMLElement, target: HTMLElement | null, fallback: number) => {
+    if (!target || !root) return fallback;
+    const rootRect = root.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    
+    // Account for canvas scale/zoom
+    // We want the position in node-local coordinates (unscaled)
+    const scale = rootRect.height / root.offsetHeight;
+    if (scale === 0) return fallback;
+    
+    const relativeTop = (targetRect.top - rootRect.top) / scale;
+    const relativeHeight = targetRect.height / scale;
+    
+    return relativeTop + relativeHeight / 2;
+  }, []);
+
+  const recalculateHandleTops = useCallback(() => {
+    const root = contentRef.current?.closest(`[data-node-id="${id}"]`) as HTMLElement | null;
+    if (!root) return;
+
+    const systemTarget = isSettingsOpen ? systemPromptRowRef.current : settingsRowRef.current;
+    setTops({
+      output: getCenterTop(root, outputLabelRef.current, DEFAULT_TOPS.output),
+      user_message: getCenterTop(root, promptRowRef.current, DEFAULT_TOPS.user_message),
+      images: getCenterTop(root, imageRowRef.current, DEFAULT_TOPS.images),
+      system_prompt: getCenterTop(root, systemTarget, DEFAULT_TOPS.system_prompt),
+    });
+  }, [getCenterTop, id, isSettingsOpen]);
+
+  useLayoutEffect(() => {
+    recalculateHandleTops();
+  }, [recalculateHandleTops, data.output, data.userMessage, data.systemPrompt, isSettingsOpen]);
+
+  useLayoutEffect(() => {
+    const root = contentRef.current?.closest(`[data-node-id="${id}"]`) as HTMLElement | null;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+
+    let rafId: number | null = null;
+    const scheduleRecalc = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        recalculateHandleTops();
+      });
+    };
+
+    const observer = new ResizeObserver(scheduleRecalc);
+    observer.observe(root);
+    if (contentRef.current) observer.observe(contentRef.current);
+    if (systemPromptRowRef.current) observer.observe(systemPromptRowRef.current);
+
+    return () => {
+      observer.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [id, recalculateHandleTops, isSettingsOpen]);
+
   const inputs = [
-    { id: 'user_message', label: 'user', top: '265px' },
-    { id: 'images', label: 'image(s)', className: 'handle-blue', top: '385px' }
+    { id: 'user_message', label: 'user', top: `${tops.user_message}px` },
+    { id: 'images', label: 'image(s)', className: 'handle-blue', top: `${tops.images}px` },
+    { id: 'system_prompt', label: 'system', top: `${tops.system_prompt}px` },
   ];
 
-  // System prompt handle is visible if drawer is open OR if it is linked
-  if (isSettingsOpen || systemLinked) {
-    // If settings are closed but linked, we show it at a default position or same position
-    inputs.push({ id: 'system_prompt', label: 'system', className: '', top: isSettingsOpen ? '468px' : '425px' });
-  }
+  void systemLinked;
 
   return (
     <BaseNode
@@ -37,36 +110,31 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
       highlighted={Boolean(data.highlighted)}
       className="w-[340px]"
       inputs={inputs}
-      outputs={[
-        { id: 'output', label: 'response', top: '253px' }
-      ]}
+      outputs={[{ id: 'output', label: 'response', top: `${tops.output}px` }]}
     >
-      <div className="flex flex-col relative">
-        {/* Output Area - Now at the top */}
-        <div className="w-full bg-neutral-100 dark:bg-[#1A1A1A] rounded-md min-h-[220px] p-4 text-[15px] font-normal text-neutral-800 dark:text-white mb-2 custom-scrollbar overflow-y-auto">
+      <div className="relative flex flex-col" ref={contentRef}>
+        <div className="custom-scrollbar mb-2 min-h-[220px] w-full overflow-y-auto rounded-md bg-neutral-100 p-4 text-[15px] font-normal text-neutral-800 dark:bg-[#1A1A1A] dark:text-white">
           {data.output ? (
-            <div className="prose dark:prose-invert max-w-none">
+            <div className="prose max-w-none dark:prose-invert">
               <ReactMarkdown>{String(data.output).replace(/\\n/g, '\n')}</ReactMarkdown>
             </div>
           ) : (
-             <span className="text-neutral-400 dark:text-white/20"></span>
+            <span className="text-neutral-400 dark:text-white/20"></span>
           )}
         </div>
 
-        {/* Output Label aligned to the right handle */}
-        <div className="flex justify-end items-center mb-4 pr-1">
+        <div className="mb-4 flex items-center justify-end pr-1" ref={outputLabelRef}>
           <span className="text-[13px] text-neutral-500 dark:text-white/40">Output</span>
         </div>
 
-        {/* User Prompt Section */}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="mb-2 flex items-center gap-2" ref={promptRowRef}>
           <span className="text-[13px] text-neutral-500 dark:text-white/40">Prompt</span>
           <Pencil size={12} className="text-neutral-500 dark:text-white/20" />
         </div>
-        
-        <div className={userLinked ? "opacity-50 pointer-events-none mb-3" : "mb-3"}>
+
+        <div className={userLinked ? 'pointer-events-none mb-3 opacity-50' : 'mb-3'}>
           <textarea
-            className="w-full bg-neutral-100 dark:bg-[#1A1A1A] rounded-md p-3 text-[13px] font-light text-neutral-800 dark:text-white/80 focus:outline-none transition-colors min-h-[100px] resize-none overflow-hidden placeholder:text-neutral-400 dark:placeholder:text-white/20"
+            className="min-h-[100px] w-full resize-none overflow-hidden rounded-md bg-neutral-100 p-3 text-[13px] font-light text-neutral-800 transition-colors placeholder:text-neutral-400 focus:outline-none dark:bg-[#1A1A1A] dark:text-white/80 dark:placeholder:text-white/20"
             placeholder={userLinked ? 'user prompt linked' : 'hi'}
             value={(data.userMessage as string) || ''}
             onChange={(e) => updateNodeData(id, { userMessage: e.target.value })}
@@ -74,48 +142,47 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
           />
         </div>
 
-        {/* Image Section */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className="mb-4 flex items-center gap-3" ref={imageRowRef}>
           <span className="text-[13px] text-neutral-500 dark:text-white/40">Image</span>
-          <div className={imagesLinked ? "opacity-50 pointer-events-none flex-1" : "flex-1"}>
-             <div className="flex items-center justify-between w-full bg-neutral-100 dark:bg-[#111111] rounded-md px-3 py-1.5 cursor-text">
-                <span className="text-[13px] text-neutral-500 dark:text-white/40">Add file</span>
-                <ImageIcon size={12} className="text-neutral-500 dark:text-white/20" />
-             </div>
+          <div className={imagesLinked ? 'pointer-events-none flex-1 opacity-50' : 'flex-1'}>
+            <div className="flex w-full cursor-text items-center justify-between rounded-md bg-neutral-100 px-3 py-1.5 dark:bg-[#111111]">
+              <span className="text-[13px] text-neutral-500 dark:text-white/40">Add file</span>
+              <ImageIcon size={12} className="text-neutral-500 dark:text-white/20" />
+            </div>
           </div>
         </div>
 
-        {/* Settings Collapsible Section */}
         <div className="flex flex-col">
-          <button 
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="flex items-center gap-1.5 text-[13px] text-neutral-500 dark:text-white/40 hover:text-neutral-700 dark:hover:text-white/60 transition-colors mb-2 w-max"
+          <button
+            ref={settingsRowRef}
+            onClick={() => setIsSettingsOpen((prev) => !prev)}
+            className="mb-2 flex w-max items-center gap-1.5 text-[13px] text-neutral-500 transition-colors hover:text-neutral-700 dark:text-white/40 dark:hover:text-white/60"
           >
             {isSettingsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             <span>Settings</span>
           </button>
-          
+
           {isSettingsOpen && (
-            <div className="flex flex-col gap-3 pl-1 animate-in slide-in-from-top-1 fade-in">
+            <div className="animate-in slide-in-from-top-1 fade-in flex flex-col gap-3 pl-1">
               <div className="flex items-center gap-3">
-                 <span className="text-[13px] text-neutral-500 dark:text-white/40 w-[45px]">Model</span>
-                  <select
-                    className="flex-1 bg-neutral-100 dark:bg-[#111111] rounded-md p-1.5 px-3 text-[13px] font-medium text-neutral-800 dark:text-white focus:outline-none transition-colors appearance-none"
-                    value={(data.model as string) || 'gemini-2.5-flash'}
-                    onChange={(e) => updateNodeData(id, { model: e.target.value })}
-                  >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                  </select>
+                <span className="w-[45px] text-[13px] text-neutral-500 dark:text-white/40">Model</span>
+                <select
+                  className="flex-1 appearance-none rounded-md bg-neutral-100 p-1.5 px-3 text-[13px] font-medium text-neutral-800 transition-colors focus:outline-none dark:bg-[#111111] dark:text-white"
+                  value={(data.model as string) || 'gemini-2.5-flash'}
+                  onChange={(e) => updateNodeData(id, { model: e.target.value })}
+                >
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                </select>
               </div>
-              
-              <div className={systemLinked ? "opacity-50 pointer-events-none flex flex-col gap-1" : "flex flex-col gap-1"}>
-                <div className="flex items-center gap-2">
+
+              <div className={systemLinked ? 'pointer-events-none flex flex-col gap-1 opacity-50' : 'flex flex-col gap-1'}>
+                <div className="flex items-center gap-2" ref={systemPromptRowRef}>
                   <span className="text-[13px] text-neutral-500 dark:text-white/40">System Prompt</span>
                   <Pencil size={12} className="text-neutral-500 dark:text-white/20" />
                 </div>
                 <textarea
-                  className="w-full bg-neutral-100 dark:bg-[#111111] rounded-md p-3 text-[13px] font-light text-neutral-800 dark:text-white/80 focus:outline-none transition-colors min-h-[60px] resize-none overflow-hidden"
+                  className="min-h-[60px] w-full resize-none overflow-hidden rounded-md bg-neutral-100 p-3 text-[13px] font-light text-neutral-800 transition-colors focus:outline-none dark:bg-[#111111] dark:text-white/80"
                   placeholder={systemLinked ? 'system prompt linked' : 'You are a helpful assistant.'}
                   value={(data.systemPrompt as string) || ''}
                   onChange={(e) => updateNodeData(id, { systemPrompt: e.target.value })}

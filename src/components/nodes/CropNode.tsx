@@ -24,14 +24,10 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
       selected={selected}
       highlighted={Boolean(data.highlighted)}
       inputs={[
-        { id: 'image_url', label: 'image_url' },
-        { id: 'x_percent', label: 'x%' },
-        { id: 'y_percent', label: 'y%' },
-        { id: 'width_percent', label: 'w%' },
-        { id: 'height_percent', label: 'h%' },
+        { id: 'image_url', label: 'image_url', className: 'handle-blue' },
       ]}
       outputs={[
-        { id: 'output', label: 'cropped_url' }
+        { id: 'output', label: 'cropped_url', className: 'handle-blue' }
       ]}
     >
       <div className="flex flex-col gap-3">

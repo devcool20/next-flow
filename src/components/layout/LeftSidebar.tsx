@@ -40,7 +40,7 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
   return (
     <aside
       className={clsx(
-        'relative z-20 flex flex-col border-r transition-all duration-300',
+        'relative z-20 flex flex-col border-r transition-[width] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
         theme === 'dark' ? 'border-[#222222] bg-[#050505]' : 'border-neutral-200/50 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-md',
         isOpen ? 'w-[276px]' : 'w-[52px]'
       )}

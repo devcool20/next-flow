@@ -33,6 +33,7 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
       status={(data.status as 'idle' | 'running' | 'success' | 'error') || 'idle'}
       selected={selected}
       highlighted={Boolean(data.highlighted)}
+      inputs={[]}
       outputs={[{ id: 'video_url', label: 'video', className: 'handle-blue' }]}
     >
       <div className="flex flex-col gap-3 h-full">

@@ -214,7 +214,7 @@ export default function RightSidebar({ isOpen, mode, theme = 'dark' }: { isOpen:
   return (
     <aside
       className={clsx(
-        'relative z-20 flex flex-col border-l transition-all duration-300',
+        'relative z-20 flex flex-col border-l transition-[width] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
         theme === 'dark'
           ? 'border-[#222222] bg-[#0b0d10]'
           : 'border-neutral-200/70 bg-white/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md',
