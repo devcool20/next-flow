@@ -92,15 +92,21 @@ function WorkflowCanvasBody({
     };
   }, []);
 
+  const currentWorkflowId = useWorkflowStore((state) => state.workflowId);
+
   useEffect(() => {
-    if (isHydrated || !workflowId) return;
-    initializeWorkspace({
-      workflowId,
-      nodes: initialNodes ?? [],
-      edges: initialEdges ?? [],
-    });
-    void fetchRuns();
-  }, [fetchRuns, initializeWorkspace, initialEdges, initialNodes, isHydrated, workflowId]);
+    if (!workflowId) return;
+    
+    // If we're entering a new workflow or the ID has changed, force re-initialization
+    if (workflowId !== currentWorkflowId) {
+      initializeWorkspace({
+        workflowId,
+        nodes: initialNodes ?? [],
+        edges: initialEdges ?? [],
+      });
+      void fetchRuns();
+    }
+  }, [workflowId, currentWorkflowId, initialNodes, initialEdges, initializeWorkspace, fetchRuns]);
 
   useEffect(() => {
     const interval = setInterval(() => {

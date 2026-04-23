@@ -10,9 +10,12 @@ import {
   WandSparkles,
   PanelLeft,
   X,
+  Sparkles,
+  Wand2
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { UserButton } from '@clerk/nextjs';
+import { useRouter, usePathname } from 'next/navigation';
 import { useWorkflowStore } from '@/lib/store';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
@@ -20,6 +23,9 @@ import { Tooltip } from '../shared/Tooltip';
 
 export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boolean; theme?: string; onToggle: () => void }) {
   const loadSampleWorkflow = useWorkflowStore((state) => state.loadSampleWorkflow);
+  const persistWorkflowNow = useWorkflowStore((state) => state.persistWorkflowNow);
+  const router = useRouter();
+  const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
@@ -37,59 +43,90 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
     setIsSearchModalOpen(true);
   };
 
+  const handleNodeEditorNavigate = async () => {
+    try {
+      await persistWorkflowNow();
+    } finally {
+      router.push('/nodes');
+    }
+  };
+
   return (
     <aside
       className={clsx(
         'relative z-20 flex flex-col border-r transition-[width] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
-        theme === 'dark' ? 'border-[#222222] bg-[#050505]' : 'border-neutral-200/50 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-md',
-        isOpen ? 'w-[276px]' : 'w-[52px]'
+        theme === 'dark' ? 'border-white/[0.06] bg-[#060606]' : 'border-neutral-200/50 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-md',
+        isOpen ? 'w-[210px]' : 'w-[56px]'
       )}
     >
       <div className={clsx("flex items-center overflow-hidden pt-3 pb-2", isOpen ? "justify-between px-5" : "justify-center px-0")}>
         <div className="flex items-center gap-3">
-          <button onClick={onToggle} className={`flex h-8 w-8 min-w-[32px] items-center justify-center rounded-md transition-colors ${theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/10 hover:text-white' : 'text-[#5f6f88] hover:bg-black/5 hover:text-black'}`}>
-            <PanelLeft size={18} />
+          <button onClick={onToggle} className={`flex h-9 w-9 min-w-[36px] items-center justify-center rounded-md transition-colors ${theme === 'dark' ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-[#5f6f88] hover:bg-black/5 hover:text-black'}`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
           </button>
-          {isOpen && <span className={`whitespace-nowrap text-xl font-semibold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-[#0f172a]'}`}>NextFlow</span>}
         </div>
-        {isOpen && <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-8 w-8' } }} />}
       </div>
 
-      <div className="flex flex-1 flex-col gap-[1px] overflow-y-auto overflow-x-hidden px-2 pt-1 pb-4 scrollbar-none">
-        <SectionTitle isOpen={isOpen}>Workspace</SectionTitle>
-        <StaticRow icon={<img src="/icons/https---s-krea-ai-icons-HomeIcon-png-128.png" alt="Home" className="w-5 h-5 object-contain" />} label="Home" isOpen={isOpen} theme={theme} />
-        <StaticRow icon={<img src="/icons/https---s-krea-ai-icons-Train-png-128.png" alt="Train" className="w-5 h-5 object-contain" />} label="Train Lora" isOpen={isOpen} theme={theme} />
-        <StaticRow icon={<img src="/icons/https---s-krea-ai-icons-NodeEditor-png-128.png" alt="Node Editor" className="w-5 h-5 object-contain" />} label="Node Editor" active isOpen={isOpen} theme={theme} />
-        <StaticRow icon={<img src="/icons/https---s-krea-ai-icons-Assets-png-128.png" alt="Assets" className="w-5 h-5 object-contain opacity-80" />} label="Assets" isOpen={isOpen} theme={theme} />
+      <div className="flex flex-1 flex-col gap-[1px] overflow-y-auto overflow-x-hidden px-2 pt-4 pb-4 scrollbar-none">
+        <StaticRow 
+          icon={<img src="/icons/https---s-krea-ai-icons-HomeIcon-png-128.png" alt="" className="w-5 h-5 object-contain opacity-80" />} 
+          label="Home" 
+          isOpen={isOpen} 
+          theme={theme} 
+        />
+        <StaticRow 
+          icon={<img src="/icons/https---s-krea-ai-icons-Train-png-128.png" alt="" className="w-5 h-5 object-contain opacity-80" />} 
+          label="Train Lora" 
+          isOpen={isOpen} 
+          theme={theme} 
+        />
+        <StaticRow
+          icon={<img src="/icons/https---s-krea-ai-icons-NodeEditor-png-128.png" alt="" className="w-5 h-5 object-contain" />}
+          label="Node Editor"
+          active={pathname === '/nodes' || pathname.startsWith('/nodes/')}
+          isOpen={isOpen}
+          theme={theme}
+          onClick={handleNodeEditorNavigate}
+        />
+        <StaticRow 
+          icon={<img src="/icons/https---s-krea-ai-icons-Assets-png-128.png" alt="" className="w-5 h-5 object-contain opacity-60" />} 
+          label="Assets" 
+          isOpen={isOpen} 
+          theme={theme} 
+        />
 
         <SectionTitle isOpen={isOpen} action={<button onClick={handleSearchClick} className="ml-auto hover:text-white"><Search size={14} /></button>}>Tools</SectionTitle>
-        {tools.map(tool => (
-          <NodeRow
-            key={tool.type}
-            type={tool.type}
-            icon={tool.icon}
-            label={tool.label}
-            color={tool.color}
-            bgColor={tool.bgColor}
-            isOpen={isOpen}
-            theme={theme}
-          />
-        ))}
+        
+        {isOpen ? (
+          <div className="flex flex-col gap-[1px]">
+            <NodeRow type="text" icon={<TypeIcon size={14} />} label="Text" bgColor="bg-blue-500/15" color="text-blue-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="image" icon={<ImageIcon size={14} />} label="Image" bgColor="bg-fuchsia-500/15" color="text-fuchsia-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="video" icon={<Film size={14} />} label="Video" bgColor="bg-amber-500/15" color="text-amber-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="extract" icon={<ImageMinus size={14} />} label="Extract" bgColor="bg-cyan-500/15" color="text-cyan-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="crop" icon={<Crop size={14} />} label="Crop" bgColor="bg-yellow-500/15" color="text-yellow-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="llm" icon={<Brain size={14} />} label="LLM" bgColor="bg-emerald-500/15" color="text-emerald-400" isOpen={isOpen} theme={theme} />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 mt-2">
+            <div className="h-8 w-8 rounded bg-blue-500/15 flex items-center justify-center"><TypeIcon size={14} className="text-blue-400" /></div>
+            <div className="h-8 w-8 rounded bg-fuchsia-500/15 flex items-center justify-center"><ImageIcon size={14} className="text-fuchsia-400" /></div>
+            <div className="h-8 w-8 rounded bg-amber-500/15 flex items-center justify-center"><Film size={14} className="text-amber-400" /></div>
+          </div>
+        )}
 
-        <div className="mt-5 space-y-2">
-          <SectionTitle isOpen={isOpen}>Samples</SectionTitle>
-          <Tooltip content="Load Product Marketing Kit" side="right" className="w-full">
-            <button
-              onClick={() => loadSampleWorkflow('product-marketing-kit')}
-              className={clsx("flex h-12 w-full items-center gap-3 rounded-xl border px-3 text-sm font-medium transition-colors", theme === 'dark' ? "border-[#2a2f37] bg-[#14171c] text-white hover:bg-[#1b1f26]" : "border-[#d8dfeb] bg-white text-[#0f172a] hover:bg-[#f1f4f9]", !isOpen && "justify-center px-0")}
-              title={!isOpen ? undefined : undefined} // remove native title
-            >
-              <div className="flex w-8 items-center justify-center">
-                <WandSparkles size={16} className="text-[#58a6ff]" />
-              </div>
-              {isOpen && <span className="truncate whitespace-nowrap">Load Product Marketing Kit</span>}
-            </button>
-          </Tooltip>
+        <div className="mt-auto pt-4">
+           <SectionTitle isOpen={isOpen}>Sessions</SectionTitle>
+           <div className={clsx("flex items-center gap-3 rounded-md hover:bg-white/5 cursor-pointer group transition-all", isOpen ? "px-3 py-2.5" : "justify-center py-2")}>
+             <div className="h-8 w-8 min-w-[32px] rounded-full border border-white/10 bg-white/5 flex items-center justify-center overflow-hidden">
+               <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-8 w-8' } }} />
+             </div>
+             {isOpen && (
+               <div className="flex flex-col min-w-0">
+                 <span className="text-[13px] font-medium truncate text-white/90">User Name</span>
+                 <span className="text-[11px] text-white/40">Free</span>
+               </div>
+             )}
+          </div>
         </div>
       </div>
 
@@ -128,10 +165,10 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
 }
 
 function SectionTitle({ children, isOpen, action }: { children: ReactNode; isOpen: boolean; action?: ReactNode }) {
-  if (!isOpen) return <div className="mb-1 mt-1 h-[17px]" />;
+  if (!isOpen) return <div className="mb-1 mt-1 h-[1px] bg-white/5 mx-2" />;
   return (
-    <div className="mb-1 mt-3 px-2 flex items-center h-9">
-      <h3 className="whitespace-nowrap text-sm font-normal text-neutral-500/70 dark:text-neutral-500">
+    <div className="mb-1 mt-3 px-3 flex items-center h-8">
+      <h3 className="whitespace-nowrap text-[11px] font-medium uppercase tracking-[0.1em] text-white/30">
         {children}
       </h3>
       {action && <div className="ml-auto text-neutral-500 flex items-center">{action}</div>}
@@ -139,18 +176,33 @@ function SectionTitle({ children, isOpen, action }: { children: ReactNode; isOpe
   );
 }
 
-function StaticRow({ icon, label, active = false, isOpen, theme }: { icon: ReactNode; label: string; active?: boolean; isOpen: boolean; theme?: string }) {
+function StaticRow({
+  icon,
+  label,
+  active = false,
+  isOpen,
+  theme,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active?: boolean;
+  isOpen: boolean;
+  theme?: string;
+  onClick?: () => void | Promise<void>;
+}) {
   const darkClass = active
-    ? 'border-white/10 bg-[#2b2d31] text-white'
-    : 'border-transparent text-[#9ba3af] hover:border-white/5 hover:bg-white/5';
+    ? 'bg-white/10 text-white font-medium'
+    : 'text-white/65 hover:bg-white/5 hover:text-white';
   const lightClass = active
-    ? 'border-transparent bg-[#e5e9f0] text-[#0f172a]'
-    : 'border-transparent text-[#5f6f88] hover:bg-[#f1f4f9]';
+    ? 'bg-[#e5e9f0] text-[#0f172a]'
+    : 'text-[#5f6f88] hover:bg-[#f1f4f9]';
 
   const btn = (
     <button
+      onClick={onClick}
       className={clsx(
-        'mb-[1px] flex h-9 w-full items-center gap-2 rounded-md px-4 text-left text-sm font-normal transition-colors',
+        'mb-[2px] flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-sm transition-colors',
         theme === 'dark' ? darkClass : lightClass,
         !isOpen && 'justify-center px-0'
       )}
@@ -195,7 +247,7 @@ function NodeRow({
 
   const btn = (
     <button
-      className={clsx("group mb-[1px] flex h-9 w-full items-center gap-2 rounded-md border border-transparent px-4 text-left text-sm font-normal transition-colors", theme === 'dark' ? "text-[#9ba3af] hover:text-white hover:bg-white/5" : "text-[#5f6f88] hover:text-[#0f172a] hover:bg-[#f1f4f9]", !isOpen && "justify-center px-0")}
+      className={clsx("group mb-[1px] flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-normal transition-colors", theme === 'dark' ? "text-white/65 hover:text-white hover:bg-white/5" : "text-[#5f6f88] hover:text-[#0f172a] hover:bg-[#f1f4f9]", !isOpen && "justify-center px-0")}
       draggable
       onDragStart={(e) => onDragStart(e, type)}
       onClick={onClick}

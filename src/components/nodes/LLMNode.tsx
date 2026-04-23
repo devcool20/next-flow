@@ -93,12 +93,10 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
   }, [id, recalculateHandleTops, isSettingsOpen]);
 
   const inputs = [
-    { id: 'user_message', label: 'user', top: `${tops.user_message}px` },
-    { id: 'images', label: 'image(s)', className: 'handle-blue', top: `${tops.images}px` },
-    { id: 'system_prompt', label: 'system', top: `${tops.system_prompt}px` },
+    { id: 'user_message', label: 'user', top: tops.user_message },
+    { id: 'images', label: 'image(s)', className: 'handle-blue', top: tops.images },
+    { id: 'system_prompt', label: 'system', top: tops.system_prompt },
   ];
-
-  void systemLinked;
 
   return (
     <BaseNode
@@ -110,7 +108,7 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
       highlighted={Boolean(data.highlighted)}
       className="w-[340px]"
       inputs={inputs}
-      outputs={[{ id: 'output', label: 'response', top: `${tops.output}px` }]}
+      outputs={[{ id: 'output', label: 'response', top: tops.output }]}
     >
       <div className="relative flex flex-col" ref={contentRef}>
         <div className="custom-scrollbar mb-2 min-h-[220px] w-full overflow-y-auto rounded-md bg-neutral-100 p-4 text-[15px] font-normal text-neutral-800 dark:bg-[#1A1A1A] dark:text-white">

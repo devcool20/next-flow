@@ -23,12 +23,13 @@ import {
   Sun,
   Users,
 } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
 
 export type ThemeMode = 'dark' | 'light';
 type RightPanelMode = 'assets' | 'versions';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
-  const [leftOpen, setLeftOpen] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('versions');
   const [rightMenuOpen, setRightMenuOpen] = useState(false);
@@ -129,7 +130,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <WorkspaceMenu theme={theme} />
           </div>
 
-          <div className="pointer-events-auto flex items-center gap-2">
+          <div className="pointer-events-auto flex items-center gap-4">
             <IconGhostButton
               icon={theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
               onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
@@ -361,6 +362,10 @@ function MenuItem({
 }
 
 function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const workflowId = pathname.split('/').pop();
+  
   const [workspaceName, setWorkspaceName] = useState(() => {
     if (typeof window === 'undefined') return 'Untitled';
     return window.localStorage.getItem('nextflow-workspace-name') || 'Untitled';
@@ -400,30 +405,30 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
   return (
     <div className="relative flex items-center" ref={menuRef}>
       <div
-        className={`flex h-11 items-center rounded-xl border transition-colors ${
-          theme === 'dark' ? 'border-white/5 bg-[#1a1a1a]/90 shadow-lg' : 'border-[#d6dde9] bg-white text-[#0f172a] shadow-sm'
+        className={`flex h-9 items-center rounded-xl border transition-all duration-300 ${
+          theme === 'dark' ? 'border-white/10 bg-black shadow-[0_4px_12px_rgba(0,0,0,0.5)]' : 'border-[#d6dde9] bg-white text-[#0f172a] shadow-sm'
         }`}
       >
         <button
           onClick={() => setMenuOpen((prev) => !prev)}
           className={`flex h-full items-center justify-center gap-1.5 rounded-l-xl px-2.5 transition-colors ${
-            theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5 hover:text-white' : 'text-[#5f6f88] hover:bg-[#f1f4f9] hover:text-[#0f172a]'
+            theme === 'dark' ? 'text-white/60 hover:bg-white/5 hover:text-white' : 'text-[#5f6f88] hover:bg-[#f1f4f9] hover:text-[#0f172a]'
           }`}
         >
-          <div className="flex h-[22px] w-[22px] items-center justify-center rounded-md bg-white text-xs font-extrabold text-black font-serif">
+          <div className="flex h-[20px] w-[20px] items-center justify-center rounded bg-white text-[10px] font-black text-black">
             N
           </div>
-          <ChevronDown size={14} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={12} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
         </button>
         <div className={`h-4 w-[1px] ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
-        <div className={`relative flex items-center overflow-hidden transition-all duration-300 ease-out ${isFocused ? 'w-44' : 'w-24'}`}>
+        <div className={`relative flex items-center overflow-hidden transition-all duration-300 ease-out ${isFocused ? 'w-48' : 'w-24'}`}>
           <input
             type="text"
             value={workspaceName}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onChange={(e) => setWorkspaceName(e.target.value)}
-            className={`h-full w-full bg-transparent px-2.5 text-sm font-semibold focus:outline-none focus:ring-0 ${
+            className={`h-full w-full bg-transparent px-3 text-[13px] font-bold focus:outline-none focus:ring-0 ${
               theme === 'dark' ? 'text-white' : 'text-[#0f172a]'
             }`}
           />
@@ -432,15 +437,18 @@ function WorkspaceMenu({ theme }: { theme: ThemeMode }) {
 
       {menuOpen && (
         <div
-          className={`absolute left-0 top-12 z-50 w-64 rounded-2xl border p-2 shadow-[0_20px_40px_-20px_rgba(0,0,0,1)] ${
-            theme === 'dark' ? 'border-white/10 bg-[#121316]' : 'border-[#d6dde9] bg-white'
+          className={`absolute left-0 top-11 z-50 w-64 rounded-2xl border p-2 shadow-[0_24px_48px_-12px_rgba(0,0,0,1)] ${
+            theme === 'dark' ? 'border-white/10 bg-[#111111]' : 'border-[#d6dde9] bg-white'
           }`}
         >
-          <MenuItem icon={<div className="pl-1 font-mono text-xs font-bold font-serif">{'<'}</div>} label="Back" shortcut="" onClick={() => setMenuOpen(false)} theme={theme} />
+          <div className="px-3 py-2 mb-1 border-b border-white/5">
+             <div className="text-[10px] uppercase tracking-wider text-white/30 font-bold">Workflow ID</div>
+             <div className="text-[12px] text-white/60 font-mono truncate select-all" title={workflowId}>{workflowId}</div>
+          </div>
+          <MenuItem icon={<div className="pl-1 text-xs font-bold">&larr;</div>} label="Back to Nodes" shortcut="" onClick={() => router.push('/nodes')} theme={theme} />
           <MenuItem icon={<Sparkles size={15} />} label="Turn into App" shortcut="" onClick={() => {}} theme={theme} />
           <MenuItem icon={<Share2 size={15} />} label="Import" shortcut="" onClick={() => {}} theme={theme} />
           <MenuItem icon={<Share2 size={15} className="rotate-180" />} label="Export" shortcut="" onClick={exportWorkspace} theme={theme} />
-          <MenuItem icon={<Users size={15} />} label="Workspaces" shortcut=">" onClick={() => {}} theme={theme} />
         </div>
       )}
     </div>

@@ -77,6 +77,7 @@ type WorkflowState = {
   initializeWorkspace: (payload: { workflowId: string; nodes: Node[]; edges: Edge[]; runs?: WorkflowRun[] }) => void;
   fetchRuns: () => Promise<void>;
   persistWorkflow: () => Promise<void>;
+  persistWorkflowNow: () => Promise<void>;
   hasInputConnection: (nodeId: string, handleId: string) => boolean;
   deleteSelectedNodes: () => void;
   duplicateSelectedNodes: () => void;
@@ -608,6 +609,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     persistTimer = setTimeout(() => {
       void flushPersist();
     }, 900);
+  },
+  persistWorkflowNow: async () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    await flushPersist();
   },
   hasInputConnection: (nodeId: string, handleId: string) => {
     return get().edges.some((edge) => edge.target === nodeId && edge.targetHandle === handleId);
