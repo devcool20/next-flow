@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 type SourceKind = 'image' | 'video';
@@ -45,6 +45,11 @@ function mimeFromOutputPath(outputPath: string) {
 const requireFromHere = createRequire(import.meta.url);
 let cachedFfmpegBinaryPath: string | null = null;
 
+type FfmpegProbeFailure = {
+  candidate: string;
+  reason: string;
+};
+
 function tryResolveFfmpegStaticPath(): string | null {
   try {
     const resolved = requireFromHere('ffmpeg-static');
@@ -58,19 +63,64 @@ function tryResolveFfmpegStaticPath(): string | null {
   return null;
 }
 
+function normalizeFfmpegCandidate(candidate: string): string {
+  if (candidate === 'ffmpeg') {
+    return candidate;
+  }
+
+  return path.isAbsolute(candidate) ? candidate : path.resolve(candidate);
+}
+
+async function canAccessCandidate(candidate: string): Promise<boolean> {
+  if (candidate === 'ffmpeg') {
+    return true;
+  }
+
+  try {
+    await fs.access(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function probeFfmpegCandidate(candidate: string): FfmpegProbeFailure | null {
+  const probe = spawnSync(candidate, ['-version'], {
+    windowsHide: true,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 5000,
+  });
+
+  if (probe.error) {
+    return {
+      candidate,
+      reason: probe.error.message,
+    };
+  }
+
+  if (probe.status === 0) {
+    return null;
+  }
+
+  const output = `${probe.stderr ?? ''} ${probe.stdout ?? ''}`.trim();
+  return {
+    candidate,
+    reason: output || `exit code ${probe.status ?? 'unknown'}`,
+  };
+}
+
 async function resolveFfmpegBinaryPath() {
   if (cachedFfmpegBinaryPath) return cachedFfmpegBinaryPath;
 
   const envPath = process.env.FFMPEG_BINARY?.trim();
+  const envManagedPath = process.env.FFMPEG_PATH?.trim();
   const staticPath = tryResolveFfmpegStaticPath();
 
   if (envPath) {
-    const normalizedEnvPath = path.resolve(envPath);
-    try {
-      await fs.access(normalizedEnvPath);
-      cachedFfmpegBinaryPath = normalizedEnvPath;
-      return normalizedEnvPath;
-    } catch {
+    const normalizedEnvPath = normalizeFfmpegCandidate(envPath);
+    const isAccessible = await canAccessCandidate(normalizedEnvPath);
+    if (!isAccessible) {
       throw new MediaProcessingError(
         'ffmpeg_binary_unavailable',
         `Configured FFMPEG_BINARY does not exist or is not readable: ${normalizedEnvPath}`,
@@ -81,33 +131,57 @@ async function resolveFfmpegBinaryPath() {
         }
       );
     }
+
+    const probeFailure = probeFfmpegCandidate(normalizedEnvPath);
+    if (!probeFailure) {
+      cachedFfmpegBinaryPath = normalizedEnvPath;
+      return normalizedEnvPath;
+    }
+
+    throw new MediaProcessingError(
+      'ffmpeg_binary_unavailable',
+      `Configured FFMPEG_BINARY is not executable: ${normalizedEnvPath}. ${probeFailure.reason}`,
+      {
+        dependency: 'ffmpeg',
+        hint: 'Fix FFMPEG_BINARY or unset it to use FFMPEG_PATH / ffmpeg-static / PATH fallback.',
+        ffmpegPath: normalizedEnvPath,
+      }
+    );
   }
 
-  const candidates = [staticPath, 'ffmpeg'].filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = [envManagedPath, staticPath, 'ffmpeg'].filter((candidate): candidate is string =>
+    Boolean(candidate)
+  );
+  const failedCandidates: FfmpegProbeFailure[] = [];
 
-  for (const candidate of candidates) {
-    if (candidate === 'ffmpeg') {
+  for (const rawCandidate of candidates) {
+    const candidate = normalizeFfmpegCandidate(rawCandidate);
+    const isAccessible = await canAccessCandidate(candidate);
+    if (!isAccessible) {
+      failedCandidates.push({
+        candidate,
+        reason: 'not found or not readable',
+      });
+      continue;
+    }
+
+    const probeFailure = probeFfmpegCandidate(candidate);
+    if (!probeFailure) {
       cachedFfmpegBinaryPath = candidate;
       return candidate;
     }
 
-    const normalized = path.resolve(candidate);
-    try {
-      await fs.access(normalized);
-      cachedFfmpegBinaryPath = normalized;
-      return normalized;
-    } catch {
-      // try next candidate
-    }
+    failedCandidates.push(probeFailure);
   }
 
   throw new MediaProcessingError(
     'ffmpeg_binary_unavailable',
-    'FFmpeg binary is unavailable. Set FFMPEG_BINARY or install ffmpeg-static.',
+    'FFmpeg binary is unavailable. Set FFMPEG_BINARY / FFMPEG_PATH or install ffmpeg.',
     {
       dependency: 'ffmpeg',
-      hint: 'Set FFMPEG_BINARY to an absolute ffmpeg path or install ffmpeg on PATH.',
-      candidates: [envPath, ...candidates].filter(Boolean),
+      hint: 'Set FFMPEG_BINARY to an executable path, or ensure ffmpeg is available on PATH.',
+      candidates: [envPath, envManagedPath, ...candidates].filter(Boolean),
+      probeFailures: failedCandidates,
     }
   );
 }

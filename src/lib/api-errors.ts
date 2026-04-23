@@ -51,7 +51,7 @@ export function toAppError(error: unknown, fallbackMessage = 'Unexpected server 
   if (typeof message === 'string' && message.includes('ffmpeg_binary_unavailable')) {
     return new AppError('dependency_unavailable', 'FFmpeg binary is unavailable for media processing.', 503, {
       dependency: 'ffmpeg',
-      hint: 'Set FFMPEG_BINARY or ensure ffmpeg-static is available to the Node runtime.',
+      hint: 'Set FFMPEG_BINARY/FFMPEG_PATH or ensure a working ffmpeg binary is available on PATH.',
       raw: message,
     });
   }
