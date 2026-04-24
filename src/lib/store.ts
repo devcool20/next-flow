@@ -15,6 +15,7 @@ import {
 import { z } from 'zod';
 import type { NodeRunRecord } from '@/lib/workflow-engine';
 import { workflowSamples } from '@/lib/samples';
+import { sanitizeNodesForWorkflowPersistence } from '@/lib/run-sanitization';
 
 type ApiErrorPayload = {
   error?: string | { code?: string; message?: string };
@@ -24,15 +25,68 @@ type WorkflowRun = {
   id: string;
   startedAt: string;
   finishedAt: string;
-  status: 'success' | 'error' | 'running' | 'partial';
+  status: 'queued' | 'running' | 'success' | 'partial' | 'failed' | 'error';
   scope?: 'full' | 'partial' | 'single';
   duration?: number | null;
   nodeRuns: NodeRunRecord[];
   executionPath: string[];
   selectedNodeIds?: string[];
   error?: string;
+  errorCode?: string;
+  triggerRunId?: string;
+  triggerStatus?: string;
 };
 export type InteractionMode = 'select' | 'pan' | 'cut';
+
+const ACTIVE_RUN_STATUSES = new Set<WorkflowRun['status']>(['queued', 'running']);
+
+function isRunActive(status: WorkflowRun['status'] | undefined) {
+  return Boolean(status && ACTIVE_RUN_STATUSES.has(status));
+}
+
+function toNodeStatus(status: NodeRunRecord['status']) {
+  if (status === 'error') return 'error';
+  if (status === 'queued' || status === 'running') return 'running';
+  return 'success';
+}
+
+function applyRunToNodes(nodes: Node[], run: WorkflowRun | null): Node[] {
+  if (!run) {
+    return nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        highlighted: false,
+      },
+    }));
+  }
+
+  const nodeRunById = new Map(run.nodeRuns.map((entry) => [entry.nodeId, entry]));
+  return nodes.map((node) => {
+    const runEntry = nodeRunById.get(node.id);
+    if (!runEntry) {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          highlighted: run.executionPath.includes(node.id),
+          status: isRunActive(run.status) ? node.data?.status ?? 'idle' : node.data?.status ?? 'idle',
+        },
+      };
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        ...(runEntry.outputs || {}),
+        highlighted: run.executionPath.includes(node.id),
+        status: toNodeStatus(runEntry.status),
+        error: runEntry.error ?? (runEntry.status === 'error' ? run.error : undefined),
+      },
+    };
+  });
+}
 
 function dedupeRuns(runs: WorkflowRun[]): WorkflowRun[] {
   const seen = new Set<string>();
@@ -232,7 +286,8 @@ async function flushPersist() {
   const { workflowId, nodes, edges, isHydrated } = useWorkflowStore.getState();
   if (!workflowId || !isHydrated) return;
 
-  const signature = JSON.stringify({ nodes, edges });
+  const persistedNodes = sanitizeNodesForWorkflowPersistence(nodes);
+  const signature = JSON.stringify({ nodes: persistedNodes, edges });
   if (signature === lastPersistSignature && !queuedPersist) {
     return;
   }
@@ -247,7 +302,7 @@ async function flushPersist() {
     await fetch('/api/workflow', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflowId, nodes, edges }),
+      body: JSON.stringify({ workflowId, nodes: persistedNodes, edges }),
     });
     lastPersistSignature = signature;
   } finally {
@@ -387,7 +442,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       isRunning: true,
       nodes: nodes.map((node) => ({
         ...node,
-        selected: false, // Clear selection on full run
+        selected: false,
         data: {
           ...node.data,
           status: connectedNodeIds.has(node.id) || edges.length === 0 ? 'running' : 'idle',
@@ -406,61 +461,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!response.ok || !payload.run) {
         throw new Error(errorMessage);
       }
-      const run = payload.run;
+      const run: WorkflowRun = {
+        ...payload.run,
+        nodeRuns: payload.run.nodeRuns ?? [],
+        executionPath: payload.run.executionPath ?? [],
+      };
       const nextHistory = dedupeRuns([run, ...get().history]);
 
-      // --- Progressive UI Simulation ---
-      // 1. Initial state: Set all involved nodes to idle/waiting
       set({
-        nodes: get().nodes.map((node) => ({
-          ...node,
-          data: { ...node.data, status: 'idle', highlighted: false },
-        })),
-      });
-
-      // 2. Sort node runs by start time to follow execution order
-      const sortedRuns = [...run.nodeRuns].sort(
-        (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
-      );
-
-      // 3. Sequentially update each node's status to mimic real-time progress
-      for (const runEntry of sortedRuns) {
-        // Set to running
-        set({
-          nodes: get().nodes.map((node) =>
-            node.id === runEntry.nodeId ? { ...node, data: { ...node.data, status: 'running' } } : node
-          ),
-        });
-
-        // Simulate wait (limit to 600ms for responsiveness, but enough to see the glow)
-        const duration = new Date(runEntry.finishedAt).getTime() - new Date(runEntry.startedAt).getTime();
-        await new Promise((resolve) => setTimeout(resolve, Math.min(duration, 600)));
-
-        // Set to final state
-        set({
-          nodes: get().nodes.map((node) =>
-            node.id === runEntry.nodeId
-              ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    highlighted: run.executionPath.includes(node.id),
-                    ...(runEntry.outputs || {}),
-                    status: runEntry.status,
-                  },
-                }
-              : node
-          ),
-        });
-      }
-
-      set({
-        isRunning: false,
+        isRunning: isRunActive(run.status),
         history: nextHistory,
         activeRunId: run.id,
       });
       void get().fetchRuns();
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Run failed';
       set({
         isRunning: false,
         nodes: get().nodes.map((node) => ({
@@ -468,6 +483,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           data: {
             ...node.data,
             status: node.data?.status === 'running' ? 'error' : node.data?.status,
+            error: node.data?.status === 'running' ? message : node.data?.error,
           },
         })),
       });
@@ -503,48 +519,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!response.ok || !payload.run) {
         throw new Error(errorMessage);
       }
-      const run = payload.run;
+      const run: WorkflowRun = {
+        ...payload.run,
+        nodeRuns: payload.run.nodeRuns ?? [],
+        executionPath: payload.run.executionPath ?? [],
+      };
       const nextHistory = dedupeRuns([run, ...get().history]);
 
-      // --- Progressive UI Simulation (Partial) ---
-      const sortedRuns = [...run.nodeRuns].sort(
-        (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
-      );
-
-      for (const runEntry of sortedRuns) {
-        set({
-          nodes: get().nodes.map((node) =>
-            node.id === runEntry.nodeId ? { ...node, data: { ...node.data, status: 'running' } } : node
-          ),
-        });
-
-        const duration = new Date(runEntry.finishedAt).getTime() - new Date(runEntry.startedAt).getTime();
-        await new Promise((resolve) => setTimeout(resolve, Math.min(duration, 500)));
-
-        set({
-          nodes: get().nodes.map((node) =>
-            node.id === runEntry.nodeId
-              ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    highlighted: run.executionPath.includes(node.id),
-                    ...(runEntry.outputs || {}),
-                    status: runEntry.status,
-                  },
-                }
-              : node
-          ),
-        });
-      }
-
       set({
-        isRunning: false,
+        isRunning: isRunActive(run.status),
         history: nextHistory,
         activeRunId: run.id,
       });
       void get().fetchRuns();
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Selected run failed';
       set({
         isRunning: false,
         nodes: get().nodes.map((node) => ({
@@ -552,6 +541,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           data: {
             ...node.data,
             status: node.data?.status === 'running' ? 'error' : node.data?.status,
+            error: node.data?.status === 'running' ? message : node.data?.error,
           },
         })),
       });
@@ -566,10 +556,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     set({
       activeRunId: runId,
-      nodes: get().nodes.map((node) => ({
-        ...node,
-        data: { ...node.data, highlighted: run.executionPath.includes(node.id) },
-      })),
+      isRunning: isRunActive(run.status),
+      nodes: applyRunToNodes(get().nodes, run),
     });
   },
   restoreRunVersion: (runId: string) => {
@@ -585,7 +573,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           data: {
             ...node.data,
             ...(runEntry.outputs || {}),
-            status: runEntry.status,
+            status: toNodeStatus(runEntry.status),
+            error: runEntry.error,
           },
         };
       }
@@ -645,12 +634,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
   initializeWorkspace: (payload) => {
     const history = dedupeRuns(payload.runs ?? []);
+    const activeRun = history[0] ?? null;
     set({
       workflowId: payload.workflowId,
-      nodes: payload.nodes,
+      nodes: applyRunToNodes(payload.nodes, activeRun),
       edges: payload.edges.map(normalizeEdgeVisual),
       history,
-      activeRunId: history[0]?.id ?? null,
+      activeRunId: activeRun?.id ?? null,
+      isRunning: isRunActive(activeRun?.status),
       graphPast: [],
       graphFuture: [],
       isHydrated: true,
@@ -659,14 +650,27 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   fetchRuns: async () => {
     const { workflowId } = get();
     if (!workflowId) return;
-    const response = await fetch(`/api/runs?workflowId=${workflowId}`, { method: 'GET' });
-    if (!response.ok) return;
-    const payload = (await response.json()) as { runs: WorkflowRun[] };
-    const history = dedupeRuns(payload.runs ?? []);
-    set({
-      history,
-      activeRunId: get().activeRunId ?? history[0]?.id ?? null,
-    });
+    try {
+      const response = await fetch(`/api/runs?workflowId=${workflowId}`, { method: 'GET' });
+      if (!response.ok) return;
+
+      const payload = (await response.json()) as { runs: WorkflowRun[] };
+      const history = dedupeRuns(payload.runs ?? []);
+      const currentActiveRunId = get().activeRunId;
+      const resolvedActiveRunId = currentActiveRunId && history.some((run) => run.id === currentActiveRunId)
+        ? currentActiveRunId
+        : history[0]?.id ?? null;
+      const activeRun = resolvedActiveRunId ? history.find((run) => run.id === resolvedActiveRunId) ?? null : null;
+
+      set({
+        history,
+        activeRunId: resolvedActiveRunId,
+        isRunning: isRunActive(activeRun?.status),
+        nodes: applyRunToNodes(get().nodes, activeRun),
+      });
+    } catch {
+      // no-op: polling should not interrupt the editor
+    }
   },
   persistWorkflow: async () => {
     if (persistTimer) {

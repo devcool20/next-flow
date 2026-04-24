@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "prisma:generate": "prisma generate",
-    "dev": "npm run prisma:generate && next dev --webpack",
+    "dev": "npm run dev:next",
+    "dev:next": "next dev --webpack",
+    "dev:trigger": "npx trigger.dev@latest dev --env-file .env",
     "build": "npm run prisma:generate && next build",
     "start": "npm run prisma:generate && next start",
     "lint": "eslint",
@@ -29,6 +31,7 @@
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
     "tailwind-merge": "^3.5.0",
+    "transloadit": "^4.10.0",
     "trigger.dev": "^4.4.4",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"

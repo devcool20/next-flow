@@ -7,12 +7,14 @@ export type NodeRunRecord = {
   nodeId: string;
   type: string;
   title: string;
-  status: 'success' | 'error' | 'running';
+  status: 'success' | 'error' | 'running' | 'queued';
   startedAt: string;
   finishedAt: string;
   inputs: NodeIOMap;
   outputs: NodeIOMap;
   error?: string;
+  errorCode?: string;
+  triggerRunId?: string;
 };
 
 type IncludedGraph = {
@@ -167,57 +169,58 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   const levels = getExecutionLevels(nodes, edges);
 
   for (const level of levels) {
-    const levelResults = await Promise.all(
-      level.map(async (nodeId, levelIndex) => {
-        const node = nodeMap.get(nodeId);
-        if (!node) {
-          return null;
-        }
+    const levelResults = [];
+    for (let levelIndex = 0; levelIndex < level.length; levelIndex += 1) {
+      const nodeId = level[levelIndex];
+      const node = nodeMap.get(nodeId);
+      if (!node) {
+        levelResults.push(null);
+        continue;
+      }
 
-        const inputs = buildInputsForNode(nodeId, edges, nodeOutputs, persistedOutputsByNodeId);
-        const startedAt = new Date().toISOString();
-        const executionId = `${nodeId}:${startedAt}:${levelIndex}`;
+      const inputs = buildInputsForNode(nodeId, edges, nodeOutputs, persistedOutputsByNodeId);
+      const startedAt = new Date().toISOString();
+      const executionId = `${nodeId}:${startedAt}:${levelIndex}`;
 
-        await onNodeStart?.(nodeId, inputs);
+      await onNodeStart?.(nodeId, inputs);
 
-        try {
-          const outputs = await executeNode(node, inputs);
-          const finishedAt = new Date().toISOString();
+      try {
+        const outputs = await executeNode(node, inputs);
+        const finishedAt = new Date().toISOString();
 
-          const record: NodeRunRecord = {
-            executionId,
-            nodeId,
-            type: node.type ?? 'unknown',
-            title: String(node.data?.label ?? node.type ?? 'Node'),
-            status: 'success',
-            startedAt,
-            finishedAt,
-            inputs,
-            outputs,
-          };
+        const record: NodeRunRecord = {
+          executionId,
+          nodeId,
+          type: node.type ?? 'unknown',
+          title: String(node.data?.label ?? node.type ?? 'Node'),
+          status: 'success',
+          startedAt,
+          finishedAt,
+          inputs,
+          outputs,
+        };
 
-          return { nodeId, outputs, record };
-        } catch (error) {
-          const finishedAt = new Date().toISOString();
-          const message = error instanceof Error ? error.message : 'Unknown node execution error.';
+        levelResults.push({ nodeId, outputs, record });
+      } catch (error) {
+        const finishedAt = new Date().toISOString();
+        const message = error instanceof Error ? error.message : 'Unknown node execution error.';
 
-          const record: NodeRunRecord = {
-            executionId,
-            nodeId,
-            type: node.type ?? 'unknown',
-            title: String(node.data?.label ?? node.type ?? 'Node'),
-            status: 'error',
-            startedAt,
-            finishedAt,
-            inputs,
-            outputs: {},
-            error: message,
-          };
+        const record: NodeRunRecord = {
+          executionId,
+          nodeId,
+          type: node.type ?? 'unknown',
+          title: String(node.data?.label ?? node.type ?? 'Node'),
+          status: 'error',
+          startedAt,
+          finishedAt,
+          inputs,
+          outputs: {},
+          error: message,
+        };
 
-          return { nodeId, outputs: null, record };
-        }
-      })
-    );
+        levelResults.push({ nodeId, outputs: null, record });
+      }
+    }
 
     let firstError: string | null = null;
     for (const result of levelResults) {

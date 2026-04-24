@@ -10,6 +10,18 @@ function parseAndValidatePercent(value: number, name: string) {
 
 export const cropImageTask = task({
   id: "crop-image",
+  queue: {
+    name: "nextflow-media",
+    concurrencyLimit: 10,
+  },
+  retry: {
+    maxAttempts: 2,
+    factor: 2,
+    minTimeoutInMs: 500,
+    maxTimeoutInMs: 5000,
+    randomize: true,
+  },
+  maxDuration: 180,
   run: async (payload: { imageUrl: string; x: number; y: number; w: number; h: number }) => {
     logger.info("Starting image crop task", { payload });
 

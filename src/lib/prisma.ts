@@ -3,24 +3,47 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-const connectionString = process.env.DATABASE_URL;
+function createPrismaClient() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required');
+  }
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL is required');
-}
-
-const adapter = new PrismaPg({ connectionString });
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+  const adapter = new PrismaPg({ connectionString });
+  return new PrismaClient({
     adapter,
     log: ['error'],
   });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
 }
+
+export function getPrismaClient() {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient();
+  }
+  return globalForPrisma.prisma;
+}
+
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, prop, receiver);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+  set(_target, prop, value) {
+    const client = getPrismaClient();
+    Reflect.set(client, prop, value);
+    return true;
+  },
+  has(_target, prop) {
+    return prop in getPrismaClient();
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getPrismaClient());
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    return Object.getOwnPropertyDescriptor(getPrismaClient(), prop);
+  },
+}) as PrismaClient;
 
 /**
  * Executes a Prisma operation with retries to handle transient connection errors
@@ -31,19 +54,18 @@ export async function withRetry<T>(
   maxRetries = 3,
   delay = 500
 ): Promise<T> {
-  let lastError: any;
+  let lastError: unknown;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await operation();
-    } catch (error: any) {
+    } catch (error) {
       lastError = error;
-      
-      // Check for common connection-related error messages
-      const errorMessage = error?.message || '';
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const isTransient =
-        errorMessage.includes('Can\'t reach database server') ||
+        errorMessage.includes("Can't reach database server") ||
         errorMessage.includes('Closed connection') ||
-        errorMessage.includes('Can\'t reach database') ||
+        errorMessage.includes("Can't reach database") ||
         errorMessage.includes('Timed out') ||
         errorMessage.includes('Connection closed');
 
@@ -51,11 +73,11 @@ export async function withRetry<T>(
         throw error;
       }
 
-      // Exponential backoff
       const waitTime = delay * Math.pow(2, attempt);
       console.warn(`[Prisma] Connection transient error, retrying in ${waitTime}ms... (Attempt ${attempt + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
+
   throw lastError;
 }

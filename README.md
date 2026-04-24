@@ -16,6 +16,19 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+`npm run dev` starts Next.js only and sends workflow runs to Trigger.dev via API (cloud worker path).
+
+If you explicitly need a local Trigger worker for debugging only:
+
+```bash
+npm run dev:trigger
+```
+
+If local `POST /api/run` fails immediately with a Trigger key message, check:
+
+- `TRIGGER_SECRET_KEY` should be `tr_prod_...` for cloud-worker execution.
+- Set `NEXTFLOW_ALLOW_DEV_TRIGGER_KEY=true` only when you intentionally run `npm run dev:trigger`.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
@@ -55,3 +68,38 @@ npx trigger.dev@latest deploy --env prod
 
 - Local dev key + local Trigger worker can make local runs pass while production queues and times out.
 - The API now rejects this misconfiguration with a clear error.
+
+## Async Orchestration + Fail-Fast Behavior
+
+Workflow execution is now asynchronous:
+
+- `POST /api/run` immediately queues a Trigger orchestration task and returns `202`.
+- The right sidebar polls `GET /api/runs` for queued/running/success/partial/failed states.
+- Stale non-starting Trigger runs are failed fast (default: ~20s).
+
+Environment knobs:
+
+- `NEXTFLOW_TRIGGER_FAIL_FAST_MS` (default `20000`)
+- `NEXTFLOW_MAX_DATA_URL_CHARS_FOR_DB` (default `100000`)
+- `NEXTFLOW_MAX_STRING_CHARS_FOR_DB` (default `8000`)
+
+## Required Deploy Steps After Pulling
+
+1. Apply Prisma schema changes:
+
+```bash
+npx prisma migrate deploy
+```
+
+2. Deploy Trigger tasks (includes `orchestrate-workflow-run`):
+
+```bash
+npx trigger.dev@latest deploy --env prod
+```
+
+3. Verify production env parity:
+
+- `TRIGGER_SECRET_KEY` (`tr_prod_...`)
+- `TRIGGER_PROJECT_REF`
+- `DATABASE_URL`
+- `GEMINI_API_KEY`

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useWorkflowStore } from '@/lib/store';
 import { Filter, History, ImageIcon, PlayCircle } from 'lucide-react';
 import type { NodeRunRecord } from '@/lib/workflow-engine';
+import type { ThemeMode } from './Shell';
 
 type RightSidebarMode = 'assets' | 'versions';
 type AssetKind = 'image' | 'video' | 'file';
@@ -73,12 +74,25 @@ function formatRelativeTime(dateIso: string) {
 function renderFormattedValue(value: string) {
   const trimmed = value.trim();
   if (/^data:image\//i.test(trimmed)) {
+    const isOmitted = trimmed.includes('[omitted');
     return [
-      <span key="data-image-label">Inline image output</span>,
+      <span key="data-image-label" className="opacity-80">
+        {isOmitted ? 'Inline image (redacted)' : 'Inline image output'}
+      </span>,
       <div key="data-image-preview" className="my-1.5 flex flex-col gap-1.5">
-        <div className="relative h-24 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-inner transition-colors">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={trimmed} alt="Output Preview" className="h-full w-full object-cover" />
+        <div className={clsx(
+          "relative h-24 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-inner transition-colors flex items-center justify-center",
+          isOmitted && "bg-amber-500/5 border-amber-500/20"
+        )}>
+          {isOmitted ? (
+            <div className="flex flex-col items-center gap-1 px-2 text-center">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400/70">Payload too large</span>
+              <span className="text-[8px] text-amber-400/40 leading-tight">Increase DB limit in dashboard to see preview</span>
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={trimmed} alt="Output Preview" className="h-full w-full object-cover" />
+          )}
         </div>
       </div>,
     ];
@@ -120,8 +134,6 @@ function renderFormattedValue(value: string) {
     return <span key={i}>{part}</span>;
   });
 }
-
-import type { ThemeMode } from './Shell';
 
 export default function RightSidebar({ isOpen, mode, theme = 'dark' }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
   const nodes = useWorkflowStore((state) => state.nodes);
@@ -260,6 +272,9 @@ function NodeRunItem({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const duration = ((new Date(nodeRun.finishedAt).getTime() - new Date(nodeRun.startedAt).getTime()) / 1000).toFixed(1);
+  const isSuccess = nodeRun.status === 'success';
+  const isRunning = nodeRun.status === 'running' || nodeRun.status === 'queued';
+  const isError = nodeRun.status === 'error';
 
   return (
     <div className="group relative pl-6 pb-4 last:pb-0">
@@ -277,11 +292,15 @@ function NodeRunItem({
       >
         <div className="flex items-center gap-2">
           <span className={clsx('text-[12px] font-medium', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>{nodeRun.title}</span>
-          {nodeRun.status === 'success' ? (
+          {isSuccess ? (
             <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-500">
               <svg viewBox="0 0 24 24" className="h-2 w-2 fill-none stroke-current stroke-[3]" xmlns="http://www.w3.org/2000/svg">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
+            </div>
+          ) : isRunning ? (
+            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-current" />
             </div>
           ) : (
             <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500/20 text-red-500">
@@ -300,10 +319,10 @@ function NodeRunItem({
           <div className={clsx('absolute left-0 top-2 h-[1px] w-3 border-t border-dashed', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#d9e2ef]')} />
 
           {!isExpanded ? (
-            nodeRun.status === 'success' ? (
+            isSuccess ? (
               <div className={clsx('flex overflow-hidden gap-1 text-[11px]', theme === 'dark' ? 'text-[#9ca7bb]' : 'text-[#475569]')}>
                 <span className={clsx('shrink-0 font-semibold', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Output:</span>
-                <span className="truncate opacity-80 italic">
+                <div className="truncate opacity-80 italic">
                   {renderFormattedValue(
                     (() => {
                       const out = nodeRun.outputs;
@@ -313,12 +332,17 @@ function NodeRunItem({
                       return String(val).length > 80 ? String(val).slice(0, 80) + '...' : String(val);
                     })()
                   )}
-                </span>
+                </div>
+              </div>
+            ) : isRunning ? (
+              <div className="flex gap-1 text-[11px] text-amber-400/90">
+                <span className="shrink-0 font-semibold">Status:</span>
+                <span className="truncate italic">Running via Trigger.dev...</span>
               </div>
             ) : (
               <div className="flex gap-1 text-[11px] text-red-400/80">
                 <span className="shrink-0 font-semibold">Error:</span>
-                <span className="truncate italic">&quot;{nodeRun.error || 'Unknown error'}&quot;</span>
+                <span className="truncate italic">&quot;{nodeRun.error || 'Execution failed'}&quot;</span>
               </div>
             )
           ) : (
@@ -335,11 +359,11 @@ function NodeRunItem({
                   <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.outputs, null, 2)}</pre>
                 </div>
               </div>
-              {nodeRun.error && (
+              {isError && (
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-tight text-red-400/80">Error</p>
                   <div className="whitespace-normal break-words rounded-lg border border-red-500/10 bg-red-950/20 p-2 font-mono text-[11px] leading-relaxed text-red-400">
-                    {nodeRun.error}
+                    {nodeRun.error || 'Execution failed'}
                   </div>
                 </div>
               )}
@@ -472,7 +496,16 @@ function VersionHistoryView({
 
           <div className="relative space-y-0">
             {activeRun.nodeRuns.length === 0 ? (
-              <p className={clsx('py-4 text-center text-[11px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>No nodes executed in this run</p>
+              <div className="space-y-2 py-4 text-center">
+                <p className={clsx('text-[11px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
+                  No nodes executed in this run
+                </p>
+                {(activeRun.status === 'failed' || activeRun.status === 'partial') && activeRun.error ? (
+                  <p className={clsx('mx-auto max-w-[95%] break-words rounded-md border px-2 py-1 text-[11px]', theme === 'dark' ? 'border-red-500/20 bg-red-950/30 text-red-300' : 'border-red-300 bg-red-50 text-red-700')}>
+                    {activeRun.error}
+                  </p>
+                ) : null}
+              </div>
             ) : (
               activeRun.nodeRuns.map((nodeRun) => (
                 <NodeRunItem
@@ -512,7 +545,13 @@ function VersionHistoryView({
                   </span>
                   <span className={clsx(
                     "text-[10px] font-bold uppercase",
-                    run.status === 'success' ? "text-emerald-500/70" : "text-red-500/70"
+                    run.status === 'success'
+                      ? "text-emerald-500/70"
+                      : run.status === 'queued' || run.status === 'running'
+                        ? "text-amber-400/80"
+                        : run.status === 'partial'
+                          ? "text-yellow-400/80"
+                          : "text-red-500/70"
                   )}>
                     {run.status}
                   </span>

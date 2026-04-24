@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Prisma } from '@prisma/client';
+import type { Node } from '@xyflow/react';
 import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow, parseWorkflowJson } from '@/lib/workspace-server';
 import { AppError, toAppError } from '@/lib/api-errors';
+import { sanitizeNodesForWorkflowPersistence } from '@/lib/run-sanitization';
 
 export async function GET() {
   try {
@@ -68,7 +70,9 @@ export async function PUT(request: NextRequest) {
       prisma.workflow.update({
         where: { id: workflow.id },
         data: {
-          nodes: body.nodes as Prisma.InputJsonValue,
+          nodes: sanitizeNodesForWorkflowPersistence(
+            (Array.isArray(body.nodes) ? (body.nodes as Node[]) : []) as Node[]
+          ) as unknown as Prisma.InputJsonValue,
           edges: body.edges as Prisma.InputJsonValue,
         },
       })

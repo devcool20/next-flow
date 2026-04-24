@@ -17,6 +17,18 @@ function validateTimestamp(raw: string): string {
 
 export const extractFrameTask = task({
   id: "extract-frame",
+  queue: {
+    name: "nextflow-media",
+    concurrencyLimit: 10,
+  },
+  retry: {
+    maxAttempts: 2,
+    factor: 2,
+    minTimeoutInMs: 500,
+    maxTimeoutInMs: 5000,
+    randomize: true,
+  },
+  maxDuration: 180,
   run: async (payload: { videoUrl: string; timestamp: string }) => {
     logger.info("Starting frame extraction task", { payload });
 

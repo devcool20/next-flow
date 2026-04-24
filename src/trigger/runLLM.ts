@@ -25,6 +25,18 @@ function clampSinglePost(text: string, maxChars: number): string {
 
 export const runLLMTask = task({
   id: "run-llm",
+  queue: {
+    name: "nextflow-llm",
+    concurrencyLimit: 20,
+  },
+  retry: {
+    maxAttempts: 2,
+    factor: 2,
+    minTimeoutInMs: 500,
+    maxTimeoutInMs: 5000,
+    randomize: true,
+  },
+  maxDuration: 180,
   run: async (payload: RunLlmPayload) => {
     logger.info("Starting LLM Generation", { model: payload.model });
 

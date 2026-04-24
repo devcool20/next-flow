@@ -61,7 +61,8 @@ function WorkflowCanvasBody({
     addNodeAtPosition,
     initializeWorkspace,
     fetchRuns,
-    isHydrated,
+    history,
+    isRunning,
     cutMode,
     interactionMode,
     removeEdgeById,
@@ -125,13 +126,16 @@ function WorkflowCanvasBody({
   }, [workflowId, currentWorkflowId, initialNodes, initialEdges, initializeWorkspace, fetchRuns]);
 
   useEffect(() => {
+    const hasActiveRun = isRunning || history.some((run) => run.status === 'queued' || run.status === 'running');
+    const pollIntervalMs = hasActiveRun ? 2000 : 12000;
+
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         void fetchRuns();
       }
-    }, 12000);
+    }, pollIntervalMs);
     return () => clearInterval(interval);
-  }, [fetchRuns]);
+  }, [fetchRuns, history, isRunning]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
