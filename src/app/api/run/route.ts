@@ -186,6 +186,7 @@ async function getPersistedOutputs(workflowId: string): Promise<Record<string, N
 function ensureDependencies(_body: RunBody, includedNodes: Node[]): DependencyState {
   const hasTriggerNodes = includedNodes.some((node) => node.type === 'llm' || node.type === 'crop' || node.type === 'extract');
   const hasLlmNodes = includedNodes.some((node) => node.type === 'llm');
+  const triggerSecret = process.env.TRIGGER_SECRET_KEY ?? '';
 
   const dependencies: DependencyState = {
     database: 'ok',
@@ -193,11 +194,24 @@ function ensureDependencies(_body: RunBody, includedNodes: Node[]): DependencySt
     gemini: hasLlmNodes ? 'ok' : 'not_required',
   };
 
-  if (hasTriggerNodes && !process.env.TRIGGER_SECRET_KEY && (!ALLOW_LOCAL_FALLBACK || FORCE_TRIGGER_ONLY)) {
+  if (hasTriggerNodes && !triggerSecret && (!ALLOW_LOCAL_FALLBACK || FORCE_TRIGGER_ONLY)) {
     dependencies.trigger = 'unavailable';
     throw new AppError('dependency_unavailable', 'Trigger.dev is not configured. Missing TRIGGER_SECRET_KEY.', 503, {
       dependencies,
     });
+  }
+
+  if (hasTriggerNodes && process.env.NODE_ENV === 'production' && triggerSecret.startsWith('tr_dev_')) {
+    dependencies.trigger = 'unavailable';
+    throw new AppError(
+      'dependency_unavailable',
+      'Production is using a Trigger.dev development key. Use a TRIGGER_SECRET_KEY that starts with tr_prod_.',
+      503,
+      {
+        dependencies,
+        hint: 'Deploy Trigger tasks to prod and set the prod secret key in Vercel environment variables.',
+      }
+    );
   }
 
   if (hasLlmNodes && !process.env.GEMINI_API_KEY) {

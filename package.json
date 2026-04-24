@@ -8,6 +8,9 @@
     "build": "npm run prisma:generate && next build",
     "start": "npm run prisma:generate && next start",
     "lint": "eslint",
+    "trigger:whoami": "npx trigger.dev@latest whoami",
+    "trigger:env:prod": "npx trigger.dev@latest env list --env prod",
+    "trigger:deploy:prod": "npx trigger.dev@latest deploy --env prod",
     "postinstall": "prisma generate"
   },
   "dependencies": {

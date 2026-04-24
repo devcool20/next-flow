@@ -34,3 +34,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Trigger.dev Production Setup (Required)
+
+`llm`, `crop`, and `extract` nodes are executed through Trigger.dev tasks.
+
+1. Deploy Trigger tasks to prod:
+
+```bash
+npx trigger.dev@latest deploy --env prod
+```
+
+2. Set Vercel environment variables:
+
+- `TRIGGER_SECRET_KEY` must be a prod key (`tr_prod_...`)
+- `GEMINI_API_KEY`
+- `TRIGGER_PROJECT_REF` (recommended to match `trigger.config.ts`)
+
+3. Do not use `tr_dev_...` in production:
+
+- Local dev key + local Trigger worker can make local runs pass while production queues and times out.
+- The API now rejects this misconfiguration with a clear error.
