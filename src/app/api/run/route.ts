@@ -9,6 +9,9 @@ import { executeWorkflow, type NodeRunRecord, type NodeIOMap } from '@/lib/workf
 import { executeNode as executeNodeLocal } from '@/lib/node-executor';
 import { AppError, toAppError } from '@/lib/api-errors';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
 type RunBody = {
   workflowId: string;
   nodes: Node[];
@@ -270,7 +273,7 @@ async function triggerTaskAndPoll<TOutput = unknown>(taskId: string, payload: un
   }
 
   const handle = await tasks.trigger(taskId, payload);
-  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 45000);
+  const timeoutMs = Number(process.env.TRIGGER_POLL_TIMEOUT_MS ?? 270000);
   if (!Number.isFinite(timeoutMs) || timeoutMs < 5000) {
     throw new AppError('invalid_input', 'TRIGGER_POLL_TIMEOUT_MS must be a number >= 5000.', 500, {
       value: process.env.TRIGGER_POLL_TIMEOUT_MS,
@@ -393,19 +396,20 @@ export async function POST(request: NextRequest) {
     const fallbackNodeIds = new Set<string>();
 
     const executeNode = async (node: Node, inputs: NodeIOMap): Promise<NodeIOMap> => {
-      // High-performance path: Try local execution first for immediate response (< 3s)
-      if (ALLOW_LOCAL_FALLBACK) {
-        try {
-          return await executeNodeLocal(node, inputs);
-        } catch (localError) {
-          console.warn(`Local execution failed for ${node.id}, falling back to Trigger.dev:`, localError);
-        }
-      }
-
-      const runWithFallback = async <T>(taskName: string, fn: () => Promise<T>): Promise<T> => {
+      const runWithFallback = async (taskName: string, fn: () => Promise<NodeIOMap>): Promise<NodeIOMap> => {
         try {
           return await fn();
         } catch (error) {
+          if (ALLOW_LOCAL_FALLBACK && !FORCE_TRIGGER_ONLY) {
+            try {
+              console.warn(`Trigger execution failed for ${node.id} (${taskName}), falling back to local executor:`, error);
+              const localResult = await executeNodeLocal(node, inputs);
+              fallbackNodeIds.add(node.id);
+              return localResult;
+            } catch (localError) {
+              console.warn(`Local fallback failed for ${node.id} after ${taskName}:`, localError);
+            }
+          }
           throw error;
         }
       };
