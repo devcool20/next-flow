@@ -42,7 +42,7 @@ export const runLLMTask = task({
 
     const requestedModel = String(payload.model ?? "").toLowerCase();
     if (!ALLOWED_MODELS.has(requestedModel)) {
-      throw new Error(`Model \"${requestedModel}\" is not supported. Use Gemini 2.5 Flash or Gemini 2.5 Pro.`);
+      throw new Error(`Model "${requestedModel}" is not supported. Use Gemini 2.5 Flash or Gemini 2.5 Pro.`);
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -70,6 +70,16 @@ export const runLLMTask = task({
       if (payload.images && payload.images.length > 0) {
         for (const imageUrl of payload.images) {
           try {
+            if (!imageUrl || typeof imageUrl !== "string" || (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:"))) {
+              logger.warn(`Skipping invalid image URL: ${imageUrl}`);
+              continue;
+            }
+
+            if (imageUrl.includes("[omitted")) {
+              logger.warn(`Skipping redacted image payload: ${imageUrl}`);
+              continue;
+            }
+
             const imageResp = await fetch(imageUrl);
             if (!imageResp.ok) {
               throw new Error(`Image fetch failed with status ${imageResp.status}`);
