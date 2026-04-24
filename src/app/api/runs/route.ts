@@ -38,15 +38,6 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    const labelByNodeId = new Map<string, string>();
-    const parsedNodes = Array.isArray(workflow.nodes) ? workflow.nodes : [];
-    for (const rawNode of parsedNodes) {
-      if (!rawNode || typeof rawNode !== 'object') continue;
-      const node = rawNode as { id?: string; data?: { label?: string } };
-      if (!node.id) continue;
-      labelByNodeId.set(node.id, node.data?.label ?? node.id);
-    }
-
     return NextResponse.json({
       runs: runs.map((run: (typeof runs)[number]) => ({
         id: run.id,
@@ -59,7 +50,7 @@ export async function GET(request: NextRequest) {
           executionId: exec.id,
           nodeId: exec.nodeId,
           type: exec.nodeType,
-          title: labelByNodeId.get(exec.nodeId) ?? exec.nodeType,
+          title: exec.nodeType,
           status: exec.status === 'failed' ? 'error' : exec.status === 'running' ? 'running' : 'success',
           startedAt: exec.createdAt.toISOString(),
           finishedAt: exec.updatedAt.toISOString(),

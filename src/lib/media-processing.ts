@@ -291,6 +291,12 @@ function parseDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer; exte
   return { mimeType, buffer, extension };
 }
 
+async function fileToDataUrl(filePath: string) {
+  const buffer = await fs.readFile(filePath);
+  const mimeType = mimeFromOutputPath(filePath);
+  return `data:${mimeType};base64,${buffer.toString('base64')}`;
+}
+
 async function toInputFile(sourceUrl: string, kind: SourceKind, tempDir: string) {
   if (!sourceUrl) {
     throw new Error(`${kind} source URL is required.`);
@@ -329,12 +335,6 @@ async function toInputFile(sourceUrl: string, kind: SourceKind, tempDir: string)
     : path.resolve(sourceUrl);
   await fs.access(filePath);
   return filePath;
-}
-
-async function fileToDataUrl(filePath: string) {
-  const buffer = await fs.readFile(filePath);
-  const mimeType = mimeFromOutputPath(filePath);
-  return `data:${mimeType};base64,${buffer.toString('base64')}`;
 }
 
 function parseTimestamp(timestamp: string) {
