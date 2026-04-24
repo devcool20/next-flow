@@ -216,12 +216,12 @@ export default function RightSidebar({ isOpen, mode, theme = 'dark' }: { isOpen:
       className={clsx(
         'relative z-20 flex flex-col border-l transition-[width] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
         theme === 'dark'
-          ? 'border-[#222222] bg-[#0b0d10]'
+          ? 'border-[#1c1c1c] bg-[#060606]'
           : 'border-neutral-200/70 bg-white/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md',
         isOpen ? 'w-full sm:w-[22rem]' : 'w-0 overflow-hidden'
       )}
     >
-      <div className={clsx('flex sm:min-w-[22rem] min-w-0 items-center justify-between border-b px-4 py-4', theme === 'dark' ? 'border-[#1f242b]' : 'border-[#e2e8f0]')}>
+      <div className={clsx('flex sm:min-w-[22rem] min-w-0 items-center justify-between border-b px-4 py-4', theme === 'dark' ? 'border-[#1c1c1c] bg-[#060606]' : 'border-[#e2e8f0]')}>
         <div className={clsx('flex items-center gap-2', theme === 'dark' ? 'text-[#e5ebf6]' : 'text-[#0f172a]')}>
           {mode === 'assets' ? <ImageIcon className="h-4 w-4" /> : <History className="h-4 w-4" />}
           <span className="text-sm font-semibold">{mode === 'assets' ? 'Asset History' : 'Version History'}</span>
@@ -365,7 +365,7 @@ function AssetHistoryView({ assets, theme }: { assets: AssetEntry[]; theme: Them
   return (
     <div className="space-y-3">
       {assets.map((asset) => (
-        <article key={asset.id} className={clsx('overflow-hidden rounded-2xl border', theme === 'dark' ? 'border-[#2a2f37] bg-[#161a1f]' : 'border-[#dbe5f3] bg-[#f8fbff]')}>
+        <article key={asset.id} className={clsx('overflow-hidden rounded-2xl border', theme === 'dark' ? 'border-[#2c2c2c] bg-[#202020]' : 'border-[#dbe5f3] bg-[#f8fbff]')}>
           <div className={clsx('relative h-40 w-full', theme === 'dark' ? 'bg-[#0f1216]' : 'bg-[#eff5fd]')}>
             {asset.kind === 'video' ? (
               <video src={asset.url} className="h-full w-full object-cover" autoPlay muted loop playsInline />
@@ -454,8 +454,8 @@ function VersionHistoryView({
       </div>
 
       {activeRun && (
-        <div className={clsx('rounded-2xl border p-4', theme === 'dark' ? 'border-[#2a2f37] bg-[#141920]' : 'border-[#dbe5f3] bg-white')}>
-          <div className={clsx('mb-4 flex items-center justify-between border-b pb-3', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#e2e8f0]')}>
+        <div className={clsx('rounded-2xl border p-4', theme === 'dark' ? 'border-[#2c2c2c] bg-[#202020]' : 'border-[#dbe5f3] bg-white')}>
+          <div className={clsx('mb-4 flex items-center justify-between border-b pb-3', theme === 'dark' ? 'border-[#2c2c2c]' : 'border-[#e2e8f0]')}>
             <div className="flex flex-col gap-0.5">
               <p className={clsx('text-[13px] font-bold', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>Current Run Details</p>
               <p className={clsx('text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
@@ -499,10 +499,10 @@ function VersionHistoryView({
                   'w-full rounded-xl border p-3 text-left transition-colors',
                   run.id === activeRunId
                     ? theme === 'dark'
-                      ? 'border-[#4b9cff] bg-[#1a2433]'
+                      ? 'border-[#4b9cff] bg-[#202020]'
                       : 'border-[#4b9cff] bg-[#e9f2ff]'
                     : theme === 'dark'
-                      ? 'border-[#2a2f37] bg-[#161a1f] hover:bg-[#1d222a]'
+                      ? 'border-[#2c2c2c] bg-[#202020] hover:bg-[#262626]'
                       : 'border-[#dbe5f3] bg-white hover:bg-[#f5f8fd]'
                 )}
               >
@@ -529,7 +529,7 @@ function VersionHistoryView({
       {/* Restore Confirmation Modal */}
       {restoringRunId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className={clsx('w-full max-w-sm rounded-2xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200', theme === 'dark' ? 'border-[#2a2f37] bg-[#141920]' : 'border-[#dbe5f3] bg-white')}>
+          <div className={clsx('w-full max-w-sm rounded-2xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200', theme === 'dark' ? 'border-[#2c2c2c] bg-[#202020]' : 'border-[#dbe5f3] bg-white')}>
             <h3 className={clsx('mb-2 text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-[#0f172a]')}>Restore Version?</h3>
             <p className={clsx('mb-6 text-sm', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
               Do you want to replace the current screen with this version of the workflow? This will restore all node outputs and statuses from that run.

@@ -14,7 +14,7 @@ import {
   Wand2
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { UserButton } from '@clerk/nextjs';
+import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter, usePathname } from 'next/navigation';
 import { useWorkflowStore } from '@/lib/store';
 import type { ReactNode } from 'react';
@@ -22,10 +22,13 @@ import { useState } from 'react';
 import { Tooltip } from '../shared/Tooltip';
 
 export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boolean; theme?: string; onToggle: () => void }) {
+  const { user } = useUser();
   const loadSampleWorkflow = useWorkflowStore((state) => state.loadSampleWorkflow);
   const persistWorkflowNow = useWorkflowStore((state) => state.persistWorkflowNow);
   const router = useRouter();
   const pathname = usePathname();
+  const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses?.[0]?.emailAddress ?? '';
+  const displayName = email ? email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : user?.firstName || user?.username || 'User';
 
   const handleSearchClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -110,10 +113,10 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
                <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-8 w-8' } }} />
              </div>
              {isOpen && (
-               <div className="flex flex-col min-w-0">
-                  <span className={clsx("text-[13px] font-medium truncate", theme === 'dark' ? "text-white/90" : "text-[#0f172a]")}>User Name</span>
+              <div className="flex flex-col min-w-0">
+                  <span className={clsx("text-[13px] font-medium truncate", theme === 'dark' ? "text-white/90" : "text-[#0f172a]")}>{displayName}</span>
                   <span className={clsx("text-[11px]", theme === 'dark' ? "text-white/40" : "text-[#5f6f88]")}>Free</span>
-               </div>
+                </div>
              )}
           </div>
         </div>
