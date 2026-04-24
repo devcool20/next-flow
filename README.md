@@ -1,105 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NextFlow: Visual AI Workflow Builder
 
-## Getting Started
+NextFlow is a powerful, pixel-perfect visual workflow builder inspired by modern AI tools like Krea.ai. It allows users to orchestrate complex data flows involving LLMs, image processing, and video extraction through an intuitive, drag-and-drop canvas.
 
-First, run the development server:
+![NextFlow Banner](https://placehold.co/1200x400/1a1a1a/ffffff?text=NextFlow+Visual+Workflow+Builder)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🏗️ Technical Architecture
+
+NextFlow follows a decoupled architecture, separating the UI orchestration from heavy-duty background tasks. This ensures stability, observability, and the ability to handle long-running operations like video processing without timing out.
+
+```mermaid
+graph TD
+    User((User)) --> NextJS[Next.js Frontend / React Flow]
+    NextJS --> Zustand[Zustand State Management]
+    Zustand --> API[Next.js API Routes]
+    API --> Prisma[Prisma ORM]
+    Prisma --> DB[(Neon PostgreSQL)]
+    API --> Trigger[Trigger.dev Orchestrator]
+    Trigger --> Tasks[Background Tasks: LLM, FFmpeg]
+    Tasks --> Files[Transloadit File Storage]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Key Components
+- **Canvas Engine**: Built on [React Flow](https://reactflow.dev/) for a smooth, interactive node-based experience.
+- **Orchestration**: Powered by [Trigger.dev](https://trigger.dev/) to handle long-running background tasks with built-in retries and observability.
+- **Media Processing**: Utilizes [Transloadit](https://transloadit.com/) and **FFmpeg** for high-quality image cropping and video frame extraction.
+- **AI Intelligence**: Integrated with **Google Gemini** for advanced text generation and analysis.
 
-`npm run dev` starts Next.js only and sends workflow runs to Trigger.dev via API (cloud worker path).
+## 🚀 Getting Started
 
-If you explicitly need a local Trigger worker for debugging only:
+Follow these steps to get your local development environment up and running.
 
+### Prerequisites
+- Node.js (v20 or higher)
+- A PostgreSQL database (e.g., [Neon](https://neon.tech/))
+- [Trigger.dev](https://trigger.dev/) account
+- [Clerk](https://clerk.com/) account for authentication
+- [Google Gemini API Key](https://aistudio.google.com/)
+
+### 1. Installation
+Clone the repository and install dependencies:
+```bash
+git clone https://github.com/your-username/next-flow.git
+cd next-flow
+npm install
+```
+
+### 2. Environment Variables
+Create a `.env` file in the root directory and add the following:
+
+```env
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Database
+DATABASE_URL=postgresql://user:password@ep-example-pooler.us-east-1.aws.neon.tech/dbname?sslmode=require
+DIRECT_URL=postgresql://user:password@ep-example.us-east-1.aws.neon.tech/dbname?sslmode=require
+
+# AI (Google Gemini)
+GEMINI_API_KEY=your_gemini_api_key
+
+# Trigger.dev
+TRIGGER_SECRET_KEY=tr_dev_...
+TRIGGER_PROJECT_REF=proj_...
+
+# Transloadit
+TRANSLOADIT_KEY=...
+TRANSLOADIT_SECRET=...
+TRANSLOADIT_TEMPLATE_ID_IMAGE=...
+TRANSLOADIT_TEMPLATE_ID_VIDEO=...
+```
+
+### 3. Database Setup
+Push the Prisma schema to your database:
+```bash
+npx prisma db push
+```
+
+### 4. Running the Development Server
+You need to run both the Next.js development server and the Trigger.dev dev worker:
+
+**Terminal 1 (Next.js):**
+```bash
+npm run dev
+```
+
+**Terminal 2 (Trigger.dev):**
 ```bash
 npm run dev:trigger
 ```
 
-If local `POST /api/run` fails immediately with a Trigger key message, check:
+Visit [http://localhost:3000](http://localhost:3000) to see the application.
 
-- `TRIGGER_SECRET_KEY` should be `tr_prod_...` for cloud-worker execution.
-- Set `NEXTFLOW_ALLOW_DEV_TRIGGER_KEY=true` only when you intentionally run `npm run dev:trigger`.
+## 🧩 Core Node Types
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **LLM Node**: Generate text using Gemini 2.5 Flash/Pro.
+- **Image Node**: Upload and process images.
+- **Video Node**: Extract frames and process video files.
+- **Text Node**: Static text inputs for prompts or notes.
+- **Trigger Node**: Entry point for manual workflow execution.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ☁️ Deployment
 
-## Learn More
+### Vercel Deployment
+1. Connect your repository to Vercel.
+2. Add all environment variables from your `.env` file to Vercel's project settings.
+3. Ensure the `BUILD` command includes Prisma generation: `npm run build`.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Trigger.dev Production Setup (Required)
-
-`llm`, `crop`, and `extract` nodes are executed through Trigger.dev tasks.
-
-1. Deploy Trigger tasks to prod:
-
+### Trigger.dev Production
+Deploy your background tasks to Trigger.dev:
 ```bash
 npx trigger.dev@latest deploy --env prod
 ```
+Ensure your `TRIGGER_SECRET_KEY` in Vercel is set to the production key (`tr_prod_...`).
 
-2. Set Vercel environment variables:
+## 🛠️ Tech Stack
 
-- `TRIGGER_SECRET_KEY` must be a prod key (`tr_prod_...`)
-- `GEMINI_API_KEY`
-- `TRIGGER_PROJECT_REF` (recommended to match `trigger.config.ts`)
+- **Framework**: [Next.js 16](https://nextjs.org/)
+- **UI & Styling**: [React Flow](https://reactflow.dev/), [Tailwind CSS](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
+- **Authentication**: [Clerk](https://clerk.com/)
+- **Database & ORM**: [Neon (PostgreSQL)](https://neon.tech/), [Prisma](https://www.prisma.io/)
+- **Task Orchestration**: [Trigger.dev](https://trigger.dev/)
+- **AI**: [Google Generative AI (Gemini)](https://ai.google.dev/)
+- **Media**: [Transloadit](https://transloadit.com/), [FFmpeg](https://ffmpeg.org/)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
 
-3. Do not use `tr_dev_...` in production:
-
-- Local dev key + local Trigger worker can make local runs pass while production queues and times out.
-- The API now rejects this misconfiguration with a clear error.
-
-## Async Orchestration + Fail-Fast Behavior
-
-Workflow execution is now asynchronous:
-
-- `POST /api/run` immediately queues a Trigger orchestration task and returns `202`.
-- The right sidebar polls `GET /api/runs` for queued/running/success/partial/failed states.
-- Stale non-starting Trigger runs are failed fast (default: ~20s).
-
-Environment knobs:
-
-- `NEXTFLOW_TRIGGER_FAIL_FAST_MS` (default `20000`)
-- `NEXTFLOW_MAX_DATA_URL_CHARS_FOR_DB` (default `100000`)
-- `NEXTFLOW_MAX_STRING_CHARS_FOR_DB` (default `8000`)
-
-## Required Deploy Steps After Pulling
-
-1. Apply Prisma schema changes:
-
-```bash
-npx prisma migrate deploy
-```
-
-2. Deploy Trigger tasks (includes `orchestrate-workflow-run`):
-
-```bash
-npx trigger.dev@latest deploy --env prod
-```
-
-3. Verify production env parity:
-
-- `TRIGGER_SECRET_KEY` (`tr_prod_...`)
-- `TRIGGER_PROJECT_REF`
-- `DATABASE_URL`
-- `GEMINI_API_KEY`
+---
+Built with ❤️ by the NextFlow Team.
