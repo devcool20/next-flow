@@ -32,7 +32,7 @@ Follow these steps to get your local development environment up and running.
 
 ### Prerequisites
 - Node.js (v20 or higher)
-- A PostgreSQL database (e.g., [Neon](https://neon.tech/))
+- A PostgreSQL database [Neon](https://neon.tech/)
 - [Trigger.dev](https://trigger.dev/) account
 - [Clerk](https://clerk.com/) account for authentication
 - [Google Gemini API Key](https://aistudio.google.com/)
