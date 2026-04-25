@@ -1,598 +1,311 @@
 'use client';
+import { memo, useState, useMemo } from 'react';
+import { History, ImageIcon, PlayCircle, Filter, ChevronDown, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
 import { useWorkflowStore } from '@/lib/store';
-import { Filter, History, ImageIcon, PlayCircle } from 'lucide-react';
+import type { WorkflowRun, ThemeMode } from '@/lib/store';
 import type { NodeRunRecord } from '@/lib/workflow-engine';
-import type { ThemeMode } from './Shell';
 
-type RightSidebarMode = 'assets' | 'versions';
-type AssetKind = 'image' | 'video' | 'file';
 type AssetEntry = {
   id: string;
   url: string;
-  kind: AssetKind;
+  kind: 'image' | 'video' | 'file';
   source: string;
-  timestamp?: string;
+  timestamp: string;
 };
 
-function looksLikeUrl(value: string) {
-  return /^(https?:\/\/|blob:|data:image\/|data:video\/)/i.test(value.trim());
+function extractUrls(nodeRuns: NodeRunRecord[]): AssetEntry[] {
+  const assets: AssetEntry[] = [];
+  nodeRuns.forEach((run) => {
+    const outputs = run.outputs || {};
+    Object.entries(outputs).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        const type = getAssetKind(value, key);
+        if (type !== 'file') {
+          assets.push({
+            id: `${run.nodeId}-${key}-${run.finishedAt}`,
+            url: value.replace(/\s/g, ''),
+            kind: type,
+            source: run.title,
+            timestamp: run.finishedAt,
+          });
+        }
+      }
+    });
+  });
+  return assets.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
-function extractUrls(value: unknown, collector: Set<string>) {
-  if (!value) return;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (looksLikeUrl(trimmed)) {
-      collector.add(trimmed);
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      extractUrls(item, collector);
-    }
-    return;
-  }
-  if (typeof value === 'object') {
-    for (const item of Object.values(value as Record<string, unknown>)) {
-      extractUrls(item, collector);
-    }
-  }
-}
-
-function inferAssetKind(url: string, source: string): AssetKind {
-  if (/^data:video\//i.test(url)) {
-    return 'video';
-  }
-  if (/^data:image\//i.test(url)) {
-    return 'image';
-  }
-  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url) || /video/i.test(source)) {
-    return 'video';
-  }
-  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif|svg)(\?|$)/i.test(url) || /image|crop|frame/i.test(source)) {
-    return 'image';
-  }
+function getAssetKind(url: string, source: string): 'image' | 'video' | 'file' {
+  if (/^data:video\//i.test(url)) return 'video';
+  if (/^data:image\//i.test(url)) return 'image';
+  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url) || /video/i.test(source)) return 'video';
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif|svg)(\?|$)/i.test(url) || /image|crop|frame/i.test(source)) return 'image';
   return 'file';
 }
 
 function formatRelativeTime(dateIso: string) {
   const timestamp = Date.parse(dateIso);
-  if (Number.isNaN(timestamp)) return 'Unknown';
+  if (Number.isNaN(timestamp)) return 'Just now';
   const diffMs = Date.now() - timestamp;
   const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.floor(diffHours / 24)}d ago`;
 }
 
-function renderFormattedValue(value: string) {
+function renderFormattedValue(value: string, allowPreview: boolean = true, theme: ThemeMode = 'dark') {
   const trimmed = value.trim();
-  if (/^data:image\//i.test(trimmed)) {
-    const isOmitted = trimmed.includes('[omitted');
+  const isOmitted = trimmed.includes('[omitted');
+  const isTruncated = trimmed.includes('[truncated:');
+  const cleanData = trimmed.replace(/\s/g, '');
+  const isValidBase64 = cleanData.length > 50;
+
+  if (/^data:image\/[a-z]+;base64,/i.test(cleanData) || isTruncated || isOmitted) {
+    if (!allowPreview) {
+      if (isOmitted || isTruncated) return <span className={clsx('italic', theme === 'dark' ? 'text-white/40' : 'text-[#888888]')}>Data too large to display</span>;
+      return <span className={clsx('break-all', theme === 'dark' ? 'text-white/60' : 'text-[#666666]')}>{trimmed.slice(0, 100)}{trimmed.length > 100 ? '...' : ''}</span>;
+    }
     return [
-      <span key="data-image-label" className="opacity-80">
-        {isOmitted ? 'Inline image (redacted)' : 'Inline image output'}
-      </span>,
-      <div key="data-image-preview" className="my-1.5 flex flex-col gap-1.5">
-        <div className={clsx(
-          "relative h-24 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-inner transition-colors flex items-center justify-center",
-          isOmitted && "bg-amber-500/5 border-amber-500/20"
-        )}>
-          {isOmitted ? (
-            <div className="flex flex-col items-center gap-1 px-2 text-center">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400/70">Payload too large</span>
-              <span className="text-[8px] text-amber-400/40 leading-tight">Increase DB limit in dashboard to see preview</span>
-            </div>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={trimmed} alt="Output Preview" className="h-full w-full object-cover" />
-          )}
-        </div>
-      </div>,
+      <span key="label" className={clsx(theme === 'dark' ? 'text-white/80' : 'text-[#444444]')}>{isOmitted ? 'Redacted' : isTruncated ? 'Truncated' : 'Image'}</span>,
+      <div key="preview" className={clsx('my-1.5 h-24 w-40 overflow-hidden rounded-lg border bg-black/20', theme === 'dark' ? 'border-white/10' : 'border-black/5')}>
+        {!isOmitted && !isTruncated && isValidBase64 ? (
+          <img src={cleanData} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[9px] font-bold uppercase text-amber-400/50">Large Payload</div>
+        )}
+      </div>
     ];
   }
 
-  const urlRegex = /(https?:\/\/[^\s"']+)/g;
-  const parts = value.split(urlRegex);
+  const parts = value.split(/((?:https?:\/\/[^\s"']+)|(?:data:image\/[a-z]+;base64,[A-Za-z0-9+/= \n\r]+))/g);
   return parts.map((part, i) => {
-    if (part.match(urlRegex)) {
-      const isImage = /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg)(\?|$)/i.test(part) || part.includes('picsum.photos');
-      
+    if (!part) return null;
+    const cleanPart = part.trim();
+    const isUrl = cleanPart.match(/https?:\/\/[^\s"']+/);
+    if (isUrl) {
+      const isImage = allowPreview && /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg|tiff)(\?|$)/i.test(cleanPart);
       return (
-        <div key={i} className="my-1.5 flex flex-col gap-1.5">
-          <a
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#4b9cff] underline decoration-[#4b9cff]/40 hover:decoration-[#4b9cff] transition-all break-all"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
+        <div key={i} className="my-1 flex flex-col gap-1">
+          <a href={cleanPart} target="_blank" rel="noreferrer" className="text-blue-500 underline break-all text-[11px] font-medium">{cleanPart}</a>
           {isImage && (
-            <div className="relative h-24 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-inner group-hover:border-white/20 transition-colors">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={part} 
-                alt="Output Preview" 
-                className="h-full w-full object-cover transition-transform hover:scale-110 duration-500" 
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
+            <div className={clsx('h-24 w-40 overflow-hidden rounded-lg border bg-black/20', theme === 'dark' ? 'border-white/10' : 'border-black/5')}>
+              <img src={cleanPart} className="h-full w-full object-cover" />
             </div>
           )}
         </div>
       );
     }
-    return <span key={i}>{part}</span>;
+    return <span key={i} className="break-words">{part}</span>;
   });
 }
 
-export default function RightSidebar({ isOpen, mode, theme = 'dark' }: { isOpen: boolean; mode: RightSidebarMode; theme?: ThemeMode }) {
-  const nodes = useWorkflowStore((state) => state.nodes);
-  const history = useWorkflowStore((state) => state.history);
-  const isRunning = useWorkflowStore((state) => state.isRunning);
-  const activeRunId = useWorkflowStore((state) => state.activeRunId);
-  const runWorkflow = useWorkflowStore((state) => state.runWorkflow);
-  const runSelectedWorkflow = useWorkflowStore((state) => state.runSelectedWorkflow);
-  const selectHistoryRun = useWorkflowStore((state) => state.selectHistoryRun);
-  const setNodes = useWorkflowStore((state) => state.setNodes);
-  void setNodes; // referenced below via getState()
-
-  // Clear highlights when sidebar is closed
-  useEffect(() => {
-    if (!isOpen) {
-      // Use the store's hook to get the state and update it
-      const { nodes: currentNodes } = useWorkflowStore.getState();
-      const hasHighlighted = currentNodes.some(n => n.data.highlighted || n.selected);
-      
-      if (hasHighlighted) {
-        const cleared = currentNodes.map((n) => ({
-          ...n,
-          data: { ...n.data, highlighted: false },
-          selected: false,
-        }));
-        useWorkflowStore.setState({ nodes: cleared, activeRunId: null });
-      }
-    }
-  }, [isOpen]);
-
-  const assets = useMemo(() => {
-    const collected: AssetEntry[] = [];
-
-    for (const node of nodes) {
-      const urls = new Set<string>();
-      extractUrls((node.data as Record<string, unknown>).imageUrl, urls);
-      extractUrls((node.data as Record<string, unknown>).videoUrl, urls);
-      extractUrls((node.data as Record<string, unknown>).output, urls);
-
-      for (const url of urls) {
-        collected.push({
-          id: `${node.id}-${url}`,
-          url,
-          kind: inferAssetKind(url, String(node.type ?? 'node')),
-          source: String(node.type ?? 'Node'),
-        });
-      }
-    }
-
-    for (const run of history) {
-      for (const nodeRun of run.nodeRuns) {
-        const urls = new Set<string>();
-        extractUrls(nodeRun.outputs, urls);
-        for (const url of urls) {
-          collected.push({
-            id: `${run.id}-${nodeRun.nodeId}-${url}`,
-            url,
-            kind: inferAssetKind(url, nodeRun.title),
-            source: nodeRun.title,
-            timestamp: run.startedAt,
-          });
-        }
-      }
-    }
-
-    const deduped = new Map<string, AssetEntry>();
-    for (const item of collected) {
-      const existing = deduped.get(item.url);
-      if (!existing) {
-        deduped.set(item.url, item);
-        continue;
-      }
-      if ((item.timestamp ?? '') > (existing.timestamp ?? '')) {
-        deduped.set(item.url, item);
-      }
-    }
-
-    return Array.from(deduped.values()).sort((a, b) => {
-      const aTs = a.timestamp ? Date.parse(a.timestamp) : 0;
-      const bTs = b.timestamp ? Date.parse(b.timestamp) : 0;
-      return bTs - aTs;
-    });
-  }, [history, nodes]);
-
-  const activeRun = useMemo(
-    () => history.find((entry) => entry.id === activeRunId) ?? null,
-    [activeRunId, history]
-  );
-
-  return (
-    <aside
-      className={clsx(
-        'relative z-20 flex flex-col border-l transition-[width] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
-        theme === 'dark'
-          ? 'border-[#1c1c1c] bg-[#060606]'
-          : 'border-neutral-200/70 bg-white/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md',
-        isOpen ? 'w-full sm:w-[22rem]' : 'w-0 overflow-hidden'
-      )}
-    >
-      <div className={clsx('flex sm:min-w-[22rem] min-w-0 items-center justify-between border-b px-4 py-4', theme === 'dark' ? 'border-[#1c1c1c] bg-[#060606]' : 'border-[#e2e8f0]')}>
-        <div className={clsx('flex items-center gap-2', theme === 'dark' ? 'text-[#e5ebf6]' : 'text-[#0f172a]')}>
-          {mode === 'assets' ? <ImageIcon className="h-4 w-4" /> : <History className="h-4 w-4" />}
-          <span className="text-sm font-semibold">{mode === 'assets' ? 'Asset History' : 'Version History'}</span>
-        </div>
-      </div>
-
-      <div className="custom-scrollbar flex sm:min-w-[22rem] min-w-0 flex-1 flex-col overflow-y-auto p-4">
-        {mode === 'assets' ? (
-          <AssetHistoryView assets={assets} theme={theme} />
-        ) : (
-          <VersionHistoryView
-            history={history}
-            activeRunId={activeRunId}
-            activeRun={activeRun}
-            isRunning={isRunning}
-            nodes={nodes}
-            runWorkflow={runWorkflow}
-            runSelectedWorkflow={runSelectedWorkflow}
-            selectHistoryRun={selectHistoryRun}
-            theme={theme}
-          />
-        )}
-      </div>
-    </aside>
-  );
-}
-
-function NodeRunItem({
-  nodeRun,
-  isSelected,
-  theme,
-}: {
-  nodeRun: NodeRunRecord;
-  isSelected: boolean | undefined;
-  theme: ThemeMode;
-}) {
+const NodeRunItem = memo(function NodeRunItem({ nodeRun, theme }: { nodeRun: NodeRunRecord; theme: ThemeMode }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const duration = ((new Date(nodeRun.finishedAt).getTime() - new Date(nodeRun.startedAt).getTime()) / 1000).toFixed(1);
   const isSuccess = nodeRun.status === 'success';
   const isRunning = nodeRun.status === 'running' || nodeRun.status === 'queued';
-  const isError = nodeRun.status === 'error';
+  const duration = ((new Date(nodeRun.finishedAt).getTime() - new Date(nodeRun.startedAt).getTime()) / 1000).toFixed(1);
 
   return (
-    <div className="group relative pl-6 pb-4 last:pb-0">
-      {/* Tree Lines */}
-      <div className={clsx('absolute left-0 top-0 h-full w-[1px]', theme === 'dark' ? 'bg-[#2a2f37]' : 'bg-[#d9e2ef]')} />
-      <div className={clsx('absolute left-0 top-2.5 h-[1px] w-4', theme === 'dark' ? 'bg-[#2a2f37]' : 'bg-[#d9e2ef]')} />
-
-      <div
-        className={clsx(
-          'flex cursor-pointer flex-col gap-1.5 rounded-lg p-2 -ml-2 transition-all duration-200',
-          theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-[#f1f5fb]',
-          isSelected && (theme === 'dark' ? 'border border-white/5 bg-white/5 shadow-sm' : 'border border-[#d8e3f2] bg-[#eef4ff] shadow-sm')
-        )}
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
+    <div className="group relative pl-4 pb-3 last:pb-0">
+      <div className={clsx('absolute left-0 top-0 h-full w-[1px]', theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.06]')} />
+      <div className={clsx('absolute left-0 top-2.5 h-[1px] w-3', theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.06]')} />
+      
+      <div className="flex flex-col gap-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex items-center gap-2">
-          <span className={clsx('text-[12px] font-medium', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>{nodeRun.title}</span>
-          {isSuccess ? (
-            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-500">
-              <svg viewBox="0 0 24 24" className="h-2 w-2 fill-none stroke-current stroke-[3]" xmlns="http://www.w3.org/2000/svg">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-          ) : isRunning ? (
-            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-current" />
-            </div>
-          ) : (
-            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500/20 text-red-500">
-              <svg viewBox="0 0 24 24" className="h-2 w-2 fill-none stroke-current stroke-[3]" xmlns="http://www.w3.org/2000/svg">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </div>
-          )}
-          <span className={clsx('text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>{duration}s</span>
+          <span className={clsx('text-[12px] font-bold', theme === 'dark' ? 'text-white/90' : 'text-[#111111]')}>{nodeRun.title}</span>
+          {isSuccess ? <CheckCircle2 size={12} className="text-emerald-500" /> : isRunning ? <Clock size={12} className="text-amber-500 animate-pulse" /> : <AlertCircle size={12} className="text-red-500" />}
+          <span className={clsx('text-[10px] font-medium', theme === 'dark' ? 'text-white/30' : 'text-[#999999]')}>{duration}s</span>
         </div>
-
-        {/* Output/Error nesting */}
-        <div className="relative pl-4 space-y-1">
-          <div className={clsx('absolute left-0 top-0 h-full w-[1px] border-l border-dashed', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#d9e2ef]')} />
-          <div className={clsx('absolute left-0 top-2 h-[1px] w-3 border-t border-dashed', theme === 'dark' ? 'border-[#2a2f37]' : 'border-[#d9e2ef]')} />
-
-          {!isExpanded ? (
-            isSuccess ? (
-              <div className={clsx('flex overflow-hidden gap-1 text-[11px]', theme === 'dark' ? 'text-[#9ca7bb]' : 'text-[#475569]')}>
-                <span className={clsx('shrink-0 font-semibold', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Output:</span>
-                <div className="truncate opacity-80 italic">
-                  {renderFormattedValue(
-                    (() => {
-                      const out = nodeRun.outputs;
-                      const val = typeof out.output === 'string' ? out.output : (out.image_url || out.frame_url || out.video_url || JSON.stringify(out));
-                      const isMedia = typeof val === 'string' && (val.startsWith('data:') || /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg|mp4|webm|mov)(\?|$)/i.test(val));
-                      if (isMedia) return String(val);
-                      return String(val).length > 80 ? String(val).slice(0, 80) + '...' : String(val);
-                    })()
-                  )}
-                </div>
-              </div>
-            ) : isRunning ? (
-              <div className="flex gap-1 text-[11px] text-amber-400/90">
-                <span className="shrink-0 font-semibold">Status:</span>
-                <span className="truncate italic">Running via Trigger.dev...</span>
-              </div>
-            ) : (
-              <div className="flex gap-1 text-[11px] text-red-400/80">
-                <span className="shrink-0 font-semibold">Error:</span>
-                <span className="truncate italic">&quot;{nodeRun.error || 'Execution failed'}&quot;</span>
-              </div>
-            )
-          ) : (
-            <div className="animate-in fade-in slide-in-from-top-1 space-y-3 pt-2 duration-200">
-              <div className="space-y-1">
-                <p className={clsx('text-[10px] font-bold uppercase tracking-tight', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Inputs</p>
-                <div className={clsx('custom-scrollbar max-h-48 overflow-y-auto rounded-lg border p-2 font-mono text-[11px]', theme === 'dark' ? 'border-white/5 bg-black/40 text-[#9ca7bb]' : 'border-[#dbe5f3] bg-[#f8fbff] text-[#334155]')}>
-                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.inputs, null, 2)}</pre>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <p className={clsx('text-[10px] font-bold uppercase tracking-tight', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>Outputs</p>
-                <div className={clsx('custom-scrollbar max-h-64 overflow-y-auto rounded-lg border p-2 font-mono text-[11px]', theme === 'dark' ? 'border-white/5 bg-black/40 text-[#e6edf9]' : 'border-[#dbe5f3] bg-[#f8fbff] text-[#0f172a]')}>
-                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(nodeRun.outputs, null, 2)}</pre>
-                </div>
-              </div>
-              {isError && (
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-tight text-red-400/80">Error</p>
-                  <div className="whitespace-normal break-words rounded-lg border border-red-500/10 bg-red-950/20 p-2 font-mono text-[11px] leading-relaxed text-red-400">
-                    {nodeRun.error || 'Execution failed'}
-                  </div>
-                </div>
-              )}
+        
+        {!isExpanded ? (
+          <div className={clsx('pl-3 border-l italic text-[11px] truncate', theme === 'dark' ? 'border-white/5 text-white/50' : 'border-black/[0.03] text-[#666666]')}>
+            {(() => {
+              const out = nodeRun.outputs ?? {};
+              const val = out.output || out.image_url || out.imageUrl || out.frame_url || out.video_url || '...';
+              const allowPreview = ['crop', 'extract', 'frame'].includes(nodeRun.type || '');
+              return renderFormattedValue(String(val), allowPreview, theme);
+            })()}
+          </div>
+        ) : (
+          <div className="pl-3 pt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div>
+              <p className={clsx('text-[9px] font-bold uppercase mb-1', theme === 'dark' ? 'text-white/30' : 'text-[#888888]')}>Outputs</p>
+              <pre className={clsx('p-2 rounded border text-[10px] font-mono overflow-auto max-h-32', theme === 'dark' ? 'bg-black/40 border-white/5 text-white/70' : 'bg-black/[0.02] border-black/[0.05] text-[#333333]')}>
+                {JSON.stringify(nodeRun.outputs, null, 2)}
+              </pre>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+});
 
-function AssetHistoryView({ assets, theme }: { assets: AssetEntry[]; theme: ThemeMode }) {
-  if (assets.length === 0) {
+const CanvasPreview = memo(function CanvasPreview({ nodes, theme }: { nodes?: any[]; theme: ThemeMode }) {
+  if (!nodes || nodes.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-left">
-        <p className={clsx('text-base leading-6', theme === 'dark' ? 'text-[#8d95a5]' : 'text-[#64748b]')}>
-          Results will appear here as nodes begin to generate outputs
-        </p>
+      <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl bg-black/20 text-[11px] font-bold text-neutral-500 uppercase tracking-widest opacity-40">
+        No preview
       </div>
     );
   }
 
+  // Calculate bounding box
+  const minX = Math.min(...nodes.map(n => n.position.x));
+  const minY = Math.min(...nodes.map(n => n.position.y));
+  const maxX = Math.max(...nodes.map(n => n.position.x + (n.width || 200)));
+  const maxY = Math.max(...nodes.map(n => n.position.y + (n.height || 100)));
+  
+  const width = maxX - minX;
+  const height = maxY - minY;
+  
   return (
-    <div className="space-y-3">
-      {assets.map((asset) => (
-        <article key={asset.id} className={clsx('overflow-hidden rounded-2xl border', theme === 'dark' ? 'border-[#2c2c2c] bg-[#202020]' : 'border-[#dbe5f3] bg-[#f8fbff]')}>
-          <div className={clsx('relative h-40 w-full', theme === 'dark' ? 'bg-[#0f1216]' : 'bg-[#eff5fd]')}>
-            {asset.kind === 'video' ? (
-              <video src={asset.url} className="h-full w-full object-cover" autoPlay muted loop playsInline />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={asset.url} alt={asset.source} className="h-full w-full object-cover" />
-            )}
-          </div>
-          <div className="flex items-center justify-between px-3 py-2">
-            <p className={clsx('truncate text-xs font-medium', theme === 'dark' ? 'text-[#e4ebf8]' : 'text-[#0f172a]')}>{asset.source}</p>
-            <p className={clsx('text-[11px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
-              {asset.timestamp ? formatRelativeTime(asset.timestamp) : asset.kind}
-            </p>
-          </div>
-        </article>
-      ))}
+    <div className={clsx('aspect-video w-full rounded-xl p-4 overflow-hidden relative', theme === 'dark' ? 'bg-black/40' : 'bg-black/[0.03]')}>
+      <div className="absolute inset-0 flex items-center justify-center p-6">
+        <div className="relative w-full h-full">
+          {nodes.map((node) => {
+            const left = ((node.position.x - minX) / (width || 1)) * 100;
+            const top = ((node.position.y - minY) / (height || 1)) * 100;
+            const nodeWidth = ((node.width || 120) / (width || 1)) * 100;
+            const nodeHeight = ((node.height || 60) / (height || 1)) * 100;
+            
+            return (
+              <div 
+                key={node.id}
+                className={clsx(
+                  'absolute rounded-sm border transition-all duration-500',
+                  theme === 'dark' ? 'bg-white/10 border-white/5' : 'bg-black/10 border-black/5'
+                )}
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  width: `${Math.max(nodeWidth, 8)}%`,
+                  height: `${Math.max(nodeHeight, 12)}%`,
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
-}
+});
 
-function VersionHistoryView({
-  history,
-  activeRunId,
-  activeRun,
-  isRunning,
-  nodes,
-  runWorkflow,
-  runSelectedWorkflow,
-  selectHistoryRun,
-  theme,
-}: {
-  history: ReturnType<typeof useWorkflowStore.getState>['history'];
-  activeRunId: string | null;
-  activeRun: ReturnType<typeof useWorkflowStore.getState>['history'][number] | null;
-  isRunning: boolean;
-  nodes: ReturnType<typeof useWorkflowStore.getState>['nodes'];
-  runWorkflow: () => Promise<void>;
-  runSelectedWorkflow: () => Promise<void>;
-  selectHistoryRun: (runId: string) => void;
-  theme: ThemeMode;
-}) {
-  const restoreRunVersion = useWorkflowStore((state) => state.restoreRunVersion);
-  const [restoringRunId, setRestoringRunId] = useState<string | null>(null);
-
-  const handleRunClick = (runId: string) => {
-    selectHistoryRun(runId);
-    setRestoringRunId(runId);
-  };
-
-  const confirmRestore = () => {
-    if (restoringRunId) {
-      restoreRunVersion(restoringRunId);
-      setRestoringRunId(null);
-    }
-  };
+const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, theme }: { run: WorkflowRun; isActive: boolean; theme: ThemeMode }) {
+  const { selectHistoryRun, restoreRunVersion } = useWorkflowStore();
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const isRunning = run.status === 'running' || run.status === 'queued';
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => void runWorkflow()}
-          disabled={isRunning}
-          className={clsx(
-            'flex items-center justify-center gap-2 rounded-xl border py-2 text-xs font-semibold transition-colors disabled:opacity-50',
-            theme === 'dark'
-              ? 'border-[#313844] bg-[#1a1f26] text-[#e6edf9] hover:bg-[#242a33]'
-              : 'border-[#d2ddeb] bg-white text-[#0f172a] hover:bg-[#f1f5fb]'
+    <div 
+      onClick={() => selectHistoryRun(run.id)}
+      className={clsx(
+        'group flex flex-col gap-3 rounded-2xl border p-4 transition-all duration-300 cursor-pointer',
+        isActive 
+          ? theme === 'dark' 
+            ? 'border-white/10 bg-white/[0.03] shadow-xl' 
+            : 'border-black/5 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]'
+          : theme === 'dark'
+            ? 'border-white/[0.03] hover:bg-white/[0.01] hover:border-white/5'
+            : 'border-transparent hover:bg-black/[0.02] hover:border-black/5'
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <span className={clsx('text-[11px] font-bold', theme === 'dark' ? 'text-white/40' : 'text-[#666666]')}>
+          {formatRelativeTime(run.startedAt)}
+        </span>
+        <div className="flex items-center gap-2">
+          {isActive && (
+            <span className={clsx('px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter', theme === 'dark' ? 'bg-white/10 text-white/60' : 'bg-black/5 text-black/40')}>
+              Current
+            </span>
           )}
-        >
-          <PlayCircle size={14} />
-          Run Workflow
-        </button>
-        <button
-          onClick={() => void runSelectedWorkflow()}
-          disabled={isRunning}
-          className={clsx(
-            'flex items-center justify-center gap-2 rounded-xl border py-2 text-xs font-semibold transition-colors disabled:opacity-50',
-            theme === 'dark'
-              ? 'border-[#313844] bg-[#1a1f26] text-[#e6edf9] hover:bg-[#242a33]'
-              : 'border-[#d2ddeb] bg-white text-[#0f172a] hover:bg-[#f1f5fb]'
+          {!isRunning && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setShowRestoreModal(true); }}
+              className={clsx(
+                'rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all opacity-0 group-hover:opacity-100',
+                theme === 'dark' ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-black/[0.04] hover:bg-black/[0.08] text-[#111111]'
+              )}
+            >
+              Restore
+            </button>
           )}
-        >
-          <Filter size={14} />
-          Run Selected
-        </button>
+        </div>
       </div>
 
-      {activeRun && (
-        <div className={clsx('rounded-2xl border p-4', theme === 'dark' ? 'border-[#2c2c2c] bg-[#202020]' : 'border-[#dbe5f3] bg-white')}>
-          <div className={clsx('mb-4 flex items-center justify-between border-b pb-3', theme === 'dark' ? 'border-[#2c2c2c]' : 'border-[#e2e8f0]')}>
-            <div className="flex flex-col gap-0.5">
-              <p className={clsx('text-[13px] font-bold', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>Current Run Details</p>
-              <p className={clsx('text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
-                {new Date(activeRun.startedAt).toLocaleString([], {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}{' '}
-                ({activeRun.scope === 'full' ? 'Full Workflow' : activeRun.scope === 'single' ? 'Single Node' : `${activeRun.nodeRuns.length} nodes selected`})
-              </p>
-            </div>
-          </div>
+      <CanvasPreview nodes={run.nodesSnapshot} theme={theme} />
 
-          <div className="relative space-y-0">
-            {activeRun.nodeRuns.length === 0 ? (
-              <div className="space-y-2 py-4 text-center">
-                <p className={clsx('text-[11px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
-                  No nodes executed in this run
-                </p>
-                {(activeRun.status === 'failed' || activeRun.status === 'partial') && activeRun.error ? (
-                  <p className={clsx('mx-auto max-w-[95%] break-words rounded-md border px-2 py-1 text-[11px]', theme === 'dark' ? 'border-red-500/20 bg-red-950/30 text-red-300' : 'border-red-300 bg-red-50 text-red-700')}>
-                    {activeRun.error}
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              activeRun.nodeRuns.map((nodeRun) => (
-                <NodeRunItem
-                  key={nodeRun.executionId}
-                  nodeRun={nodeRun}
-                  isSelected={nodes.find((n) => n.id === nodeRun.nodeId)?.selected}
-                  theme={theme}
-                />
-              ))
-            )}
-          </div>
+      <div className="flex items-center justify-between">
+        <div className={clsx('text-[11px] font-bold opacity-40', theme === 'dark' ? 'text-white' : 'text-black')}>
+          {run.nodesSnapshot?.length || run.nodeRuns.length} nodes · {run.edgesSnapshot?.length || 0} edges
+        </div>
+        <div className={clsx('h-1.5 w-1.5 rounded-full', run.status === 'success' ? 'bg-emerald-500' : isRunning ? 'bg-amber-500 animate-pulse' : 'bg-red-500')} />
+      </div>
+
+      {isActive && run.nodeRuns.length > 0 && (
+        <div className={clsx('mt-2 border-t pt-3 space-y-1', theme === 'dark' ? 'border-white/5' : 'border-black/[0.05]')}>
+          {run.nodeRuns.map(nr => <NodeRunItem key={nr.nodeId} nodeRun={nr} theme={theme} />)}
         </div>
       )}
 
-      {history.length > 0 && (
-        <div className="space-y-3">
-          <p className={clsx('text-[10px] font-bold uppercase tracking-widest', theme === 'dark' ? 'text-[#5c6471]' : 'text-[#64748b]')}>History</p>
-          <div className="space-y-2">
-            {history.map((run, index) => (
-              <button
-                key={`${run.id}-${index}`}
-                onClick={() => handleRunClick(run.id)}
-                className={clsx(
-                  'w-full rounded-xl border p-3 text-left transition-colors',
-                  run.id === activeRunId
-                    ? theme === 'dark'
-                      ? 'border-[#4b9cff] bg-[#202020]'
-                      : 'border-[#4b9cff] bg-[#e9f2ff]'
-                    : theme === 'dark'
-                      ? 'border-[#2c2c2c] bg-[#202020] hover:bg-[#262626]'
-                      : 'border-[#dbe5f3] bg-white hover:bg-[#f5f8fd]'
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={clsx('text-[11px] font-medium', theme === 'dark' ? 'text-[#e6edf9]' : 'text-[#0f172a]')}>
-                    {formatRelativeTime(run.startedAt)}
-                  </span>
-                  <span className={clsx(
-                    "text-[10px] font-bold uppercase",
-                    run.status === 'success'
-                      ? "text-emerald-500/70"
-                      : run.status === 'queued' || run.status === 'running'
-                        ? "text-amber-400/80"
-                        : run.status === 'partial'
-                          ? "text-yellow-400/80"
-                          : "text-red-500/70"
-                  )}>
-                    {run.status}
-                  </span>
-                </div>
-                <p className={clsx('mt-1 text-[10px]', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
-                  {run.nodeRuns.length} node{run.nodeRuns.length === 1 ? '' : 's'} | {run.scope} run
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Restore Confirmation Modal */}
-      {restoringRunId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className={clsx('w-full max-w-sm rounded-2xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200', theme === 'dark' ? 'border-[#2c2c2c] bg-[#202020]' : 'border-[#dbe5f3] bg-white')}>
-            <h3 className={clsx('mb-2 text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-[#0f172a]')}>Restore Version?</h3>
-            <p className={clsx('mb-6 text-sm', theme === 'dark' ? 'text-[#8592a8]' : 'text-[#64748b]')}>
-              Do you want to replace the current screen with this version of the workflow? This will restore all node outputs and statuses from that run.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setRestoringRunId(null)}
-                className={clsx(
-                  'flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors',
-                  theme === 'dark' ? 'bg-[#242a33] text-white hover:bg-[#2d3540]' : 'bg-[#eef2f8] text-[#0f172a] hover:bg-[#e4ebf5]'
-                )}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmRestore}
-                className="flex-1 rounded-xl bg-[#4b9cff] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3d8be5]"
-              >
-                Restore
-              </button>
+      {showRestoreModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={e => e.stopPropagation()}>
+          <div className={clsx('w-full max-w-sm rounded-2xl border p-6 shadow-2xl', theme === 'dark' ? 'border-white/10 bg-[#121212] text-white' : 'border-black/5 bg-white text-black')}>
+            <h3 className="text-lg font-bold">Restore this version?</h3>
+            <p className={clsx('mt-2 text-sm', theme === 'dark' ? 'opacity-50' : 'text-[#666666]')}>This will replace your current workflow with this version's values.</p>
+            <div className="mt-6 flex gap-3">
+              <button className={clsx('flex-1 rounded-xl py-2.5 font-bold', theme === 'dark' ? 'bg-white/5' : 'bg-black/5')} onClick={() => setShowRestoreModal(false)}>Cancel</button>
+              <button className="flex-1 rounded-xl bg-blue-600 py-2.5 font-bold text-white" onClick={() => { restoreRunVersion(run.id); setShowRestoreModal(false); }}>Confirm</button>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+});
+
+export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean; mode: 'assets' | 'versions'; theme: ThemeMode }) {
+  const { history, activeRunId, isRunning } = useWorkflowStore();
+  const assets = useMemo(() => extractUrls(history.flatMap(h => h.nodeRuns)), [history]);
+
+  return (
+    <aside className={clsx(
+      'relative z-20 flex flex-col border-l transition-[width] duration-[340ms] ease-out',
+      theme === 'dark' ? 'border-white/5 bg-[#060606]' : 'border-neutral-200 bg-white',
+      isOpen ? 'w-[22rem]' : 'w-0 overflow-hidden'
+    )}>
+      <div className="flex items-center justify-between p-4 pb-2">
+        <div className={clsx('flex items-center gap-2 font-bold', theme === 'dark' ? 'text-white/30' : 'text-[#666666]')}>
+          {mode === 'assets' ? <ImageIcon size={14} /> : <History size={14} />}
+          <span className="text-[10px] uppercase tracking-widest">{mode === 'assets' ? 'Asset History' : 'Version History'}</span>
+        </div>
+      </div>
+
+      <div className="custom-scrollbar flex-1 overflow-y-auto p-4 pt-2">
+        {mode === 'assets' ? (
+          <div className="grid grid-cols-1 gap-3">
+            {assets.map(asset => (
+              <div key={asset.id} className={clsx('group overflow-hidden rounded-xl border', theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-black/5 bg-black/[0.02]')}>
+                <div className="aspect-video w-full bg-black/20">
+                  {asset.kind === 'video' ? <video src={asset.url} className="h-full w-full object-cover" autoPlay muted loop /> : <img src={asset.url} className="h-full w-full object-cover" />}
+                </div>
+                <div className="p-2 flex items-center justify-between">
+                  <span className={clsx('text-[11px] font-bold', theme === 'dark' ? 'text-white/60' : 'text-[#111111]')}>{asset.source}</span>
+                  <span className={clsx('text-[10px] font-medium', theme === 'dark' ? 'text-white/30' : 'text-[#999999]')}>{formatRelativeTime(asset.timestamp)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {history.map(run => <VersionHistoryCard key={run.id} run={run} isActive={run.id === activeRunId} theme={theme} />)}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }

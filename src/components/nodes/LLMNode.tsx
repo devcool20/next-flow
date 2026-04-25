@@ -1,4 +1,4 @@
-import { Brain, ChevronDown, ChevronRight, Pencil, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Pencil, Image as ImageIcon, AlertCircle, Copy, Check } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
 import ReactMarkdown from 'react-markdown';
@@ -28,6 +28,7 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(true);
   const [tops, setTops] = useState<HandleTopState>(DEFAULT_TOPS);
+  const [copied, setCopied] = useState(false);
 
   const contentRef = useRef<HTMLDivElement | null>(null);
   const outputLabelRef = useRef<HTMLDivElement | null>(null);
@@ -128,30 +129,54 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
       outputs={[{ id: 'output', label: 'response', top: tops.output }]}
     >
       <div className="relative flex flex-col" ref={contentRef}>
-        <div className="custom-scrollbar mb-2 min-h-[220px] w-full overflow-y-auto rounded-md bg-neutral-100 p-4 text-[15px] font-normal text-neutral-800 dark:bg-[#1A1A1A] dark:text-white relative">
-          {data.status === 'running' ? (
-            <div className="flex flex-col gap-3">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-              <div className="h-4 w-full animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-              <div className="h-4 w-5/6 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-              <div className="h-4 w-2/3 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-              <div className="h-4 w-4/5 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-              <div className="h-4 w-[60%] animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-            </div>
-          ) : data.status === 'error' ? (
-            <div className="flex flex-col gap-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-red-500">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <AlertCircle size={16} />
-                <span>Execution Error</span>
+        <div className="group/output relative mb-2 w-full">
+          <div className="custom-scrollbar max-h-[145px] min-h-[145px] w-full overflow-y-auto rounded-md bg-neutral-100 p-4 text-[14px] font-normal text-neutral-800 dark:bg-[#1A1A1A] dark:text-white transition-all duration-200">
+            {data.status === 'running' ? (
+              <div className="flex flex-col gap-3">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
+                <div className="h-4 w-full animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
+                <div className="h-4 w-5/6 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
+                <div className="h-4 w-2/3 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
               </div>
-              <p className="text-[13px] leading-relaxed opacity-80">{String(data.error || 'The model failed to generate a response. Please check your inputs and try again.')}</p>
-            </div>
-          ) : data.output ? (
-            <div className="prose max-w-none dark:prose-invert">
-              <ReactMarkdown>{String(data.output).replace(/\\n/g, '\n')}</ReactMarkdown>
-            </div>
-          ) : (
-            <span className="text-neutral-400 dark:text-white/20 italic">No output yet</span>
+            ) : data.status === 'error' ? (
+              <div className="flex flex-col gap-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-red-500">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <AlertCircle size={16} />
+                  <span>Execution Error</span>
+                </div>
+                <p className="text-[13px] leading-relaxed opacity-80">{String(data.error || 'The model failed to generate a response.')}</p>
+              </div>
+            ) : data.output ? (
+              <div className="prose max-w-none dark:prose-invert prose-p:leading-relaxed prose-sm">
+                <ReactMarkdown>{String(data.output).replace(/\\n/g, '\n')}</ReactMarkdown>
+              </div>
+            ) : (
+              <span className="text-neutral-400 dark:text-white/20 italic">No output yet</span>
+            )}
+          </div>
+
+          {/* Floating Copy Button */}
+          {Boolean(data.output) && data.status !== 'running' && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(String(data.output));
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="absolute right-2 top-2 opacity-0 group-hover/output:opacity-100 transition-opacity p-2 rounded-lg bg-black/10 hover:bg-black/20 dark:bg-white/5 dark:hover:bg-white/10 backdrop-blur-md text-neutral-500 dark:text-white/40 flex items-center gap-1.5 text-[11px] font-bold"
+            >
+              {copied ? (
+                <>
+                  <Check size={12} className="text-emerald-500" />
+                  <span className="text-emerald-500">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
           )}
         </div>
 

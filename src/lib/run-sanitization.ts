@@ -30,8 +30,11 @@ export function redactDataUrl(value: string): string {
 function sanitizeString(value: string): string {
   const trimmed = value.trim();
 
-  if (isDataUrl(trimmed) && trimmed.length > dataUrlCharLimit) {
-    return redactDataUrl(trimmed);
+  if (isDataUrl(trimmed)) {
+    if (trimmed.length > dataUrlCharLimit) {
+      return redactDataUrl(trimmed);
+    }
+    return value; // Preserve small-to-medium data URLs entirely
   }
 
   if (trimmed.length > stringCharLimit) {

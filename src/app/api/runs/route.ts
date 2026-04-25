@@ -7,8 +7,8 @@ import { AppError, toAppError } from '@/lib/api-errors';
 
 const NON_TERMINAL_RUN_STATUSES = new Set(['queued', 'running']);
 const FAIL_FAST_NOT_STARTED_MS = Number(process.env.NEXTFLOW_TRIGGER_FAIL_FAST_MS ?? 20_000);
-const RECONCILE_LIMIT = 6;
-const RECONCILE_HEARTBEAT_MS = 15_000;
+const RECONCILE_LIMIT = 3;
+const RECONCILE_HEARTBEAT_MS = 8_000;
 
 function safeFailFastMs() {
   return Number.isFinite(FAIL_FAST_NOT_STARTED_MS) && FAIL_FAST_NOT_STARTED_MS >= 5_000
@@ -253,6 +253,8 @@ export async function GET(request: NextRequest) {
           .filter((exec) => exec.status === 'success')
           .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
           .map((exec) => exec.nodeId),
+        nodesSnapshot: run.nodesSnapshot as any[] ?? undefined,
+        edgesSnapshot: run.edgesSnapshot as any[] ?? undefined,
       })),
     });
   } catch (error) {

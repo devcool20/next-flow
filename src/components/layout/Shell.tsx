@@ -200,8 +200,11 @@ export default function Shell({
                 <Tooltip content={rightPanelMode === 'assets' ? 'Assets' : 'History'} side="bottom">
                   <button
                     onClick={handleMainIconClick}
-                    className={`flex h-full items-center justify-center rounded-l-xl px-3 hover:text-white ${
-                      theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5' : 'text-[#5f6f88] hover:bg-[#f1f4f9]'
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className={`flex h-full items-center justify-center rounded-l-xl px-3 outline-none focus:outline-none focus:ring-0 active:bg-transparent select-none transition-colors ${
+                      theme === 'dark' 
+                        ? 'text-[#8e8e8e] hover:text-white' 
+                        : 'text-[#5f6f88] hover:text-[#0f172a]'
                     } ${rightOpen ? (theme === 'dark' ? 'text-white' : 'text-[#0f172a]') : ''}`}
                   >
                     {rightPanelMode === 'assets' ? <ImageIcon size={14} /> : <History size={14} />}
@@ -211,8 +214,11 @@ export default function Shell({
                 <Tooltip content="Options" side="bottom">
                   <button
                     onClick={() => setRightMenuOpen((prev) => !prev)}
-                    className={`flex h-full items-center justify-center rounded-r-xl px-2 hover:text-white ${
-                      theme === 'dark' ? 'text-[#8e8e8e] hover:bg-white/5' : 'text-[#5f6f88] hover:bg-[#f1f4f9]'
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className={`flex h-full items-center justify-center rounded-r-xl px-2 outline-none focus:outline-none focus:ring-0 active:bg-transparent select-none transition-colors ${
+                      theme === 'dark' 
+                        ? 'text-[#8e8e8e] hover:text-white' 
+                        : 'text-[#5f6f88] hover:text-[#0f172a]'
                     } ${rightMenuOpen ? (theme === 'dark' ? 'text-white' : 'text-[#0f172a]') : ''}`}
                   >
                     <ChevronDown size={14} className={`transition-transform ${rightMenuOpen ? 'rotate-180' : ''}`} />
@@ -420,7 +426,7 @@ function DockButton({
   const btn = (
     <button
       onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+      className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors outline-none focus:outline-none focus:ring-0 select-none ${
         theme === 'dark'
           ? active
             ? 'bg-white/10 text-white shadow-inner'

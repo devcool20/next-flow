@@ -46,6 +46,8 @@ model WorkflowRun {
   startedAt    DateTime?
   finishedAt   DateTime?
   reconciledAt DateTime?
+  nodesSnapshot Json?           // Snapshot of nodes for preview/restore
+  edgesSnapshot Json?           // Snapshot of edges for preview/restore
   executions NodeExecution[]
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt

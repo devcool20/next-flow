@@ -5,7 +5,7 @@ import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow } from '@/lib/workspace-server';
 import { AppError, toAppError } from '@/lib/api-errors';
 import { getIncludedGraph } from '@/lib/run-graph';
-import { stripRuntimeNodeDataForExecution } from '@/lib/run-sanitization';
+import { stripRuntimeNodeDataForExecution, sanitizeNodesForWorkflowPersistence } from '@/lib/run-sanitization';
 import type { RunBody, WorkflowOrchestratorPayload } from '@/lib/run-types';
 
 export const runtime = 'nodejs';
@@ -158,6 +158,8 @@ export async function POST(request: NextRequest) {
           scope: body.scope,
           triggerStatus: 'QUEUED',
           startedAt: new Date(),
+          nodesSnapshot: sanitizeNodesForWorkflowPersistence(body.nodes) as any,
+          edgesSnapshot: body.edges as any,
         },
       })
     );

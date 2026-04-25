@@ -1,3 +1,4 @@
+'use client';
 import { ImageIcon as ImageIcon2, UploadCloud } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
@@ -25,6 +26,8 @@ export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selecte
     reader.readAsDataURL(file);
   };
 
+  const imageUrl = data.imageUrl || data.image_url || data.frame_url || data.video_url;
+
   return (
     <BaseNode
       id={id}
@@ -38,10 +41,14 @@ export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selecte
       outputs={[{ id: 'image_url', label: 'image', className: 'handle-blue' }]}
     >
       <div className="flex flex-col gap-3 h-full">
-        {data.imageUrl ? (
+        {imageUrl ? (
           <div className="relative w-full h-32 rounded-md overflow-hidden bg-neutral-100 border border-neutral-200 dark:bg-[#1A1A1A] dark:border-[#333] group">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={String(data.imageUrl)} alt="Uploaded" className="w-full h-full object-cover" />
+            {String(imageUrl).startsWith('data:video/') || String(imageUrl).endsWith('.mp4') ? (
+               <video src={String(imageUrl)} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={String(imageUrl)} alt="Uploaded" className="w-full h-full object-cover" />
+            )}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <button 
                  onClick={() => fileInputRef.current?.click()}
