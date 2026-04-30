@@ -1,4 +1,4 @@
-import { Brain, ChevronDown, ChevronRight, Pencil, Image as ImageIcon, AlertCircle, Copy, Check } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Pencil, Image as ImageIcon, Copy, Check } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
 import ReactMarkdown from 'react-markdown';
@@ -137,14 +137,6 @@ export const LLMNode = memo(function LLMNode({ id, data, selected }: { id: strin
                 <div className="h-4 w-full animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
                 <div className="h-4 w-5/6 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
                 <div className="h-4 w-2/3 animate-pulse rounded bg-black/5 dark:bg-white/5"></div>
-              </div>
-            ) : data.status === 'error' ? (
-              <div className="flex flex-col gap-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-red-500">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <AlertCircle size={16} />
-                  <span>Execution Error</span>
-                </div>
-                <p className="text-[13px] leading-relaxed opacity-80">{String(data.error || 'The model failed to generate a response.')}</p>
               </div>
             ) : data.output ? (
               <div className="prose max-w-none dark:prose-invert prose-p:leading-relaxed prose-sm">

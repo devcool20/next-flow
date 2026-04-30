@@ -1,6 +1,7 @@
 'use client';
 import { memo, useState, useMemo } from 'react';
-import { History, ImageIcon, PlayCircle, Filter, ChevronDown, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import type { Node } from '@xyflow/react';
+import { History, ImageIcon, CheckCircle2, AlertCircle, Clock, ExternalLink } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useWorkflowStore } from '@/lib/store';
 import type { WorkflowRun, ThemeMode } from '@/lib/store';
@@ -12,10 +13,43 @@ type AssetEntry = {
   kind: 'image' | 'video' | 'file';
   source: string;
   timestamp: string;
+  isCurrent?: boolean;
 };
 
-function extractUrls(nodeRuns: NodeRunRecord[]): AssetEntry[] {
+function getNodeMediaValue(node: Node): { url: string; kind: 'image' | 'video' } | null {
+  const data = node.data ?? {};
+  const raw =
+    data.imageUrl ??
+    data.image_url ??
+    data.frame_url ??
+    data.videoUrl ??
+    data.video_url ??
+    data.output;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const kind = getAssetKind(raw, String(node.type ?? data.label ?? ''));
+  if (kind !== 'image' && kind !== 'video') return null;
+  return { url: raw.replace(/\s/g, ''), kind };
+}
+
+function extractSnapshotAssets(nodes?: Node[], timestamp = new Date().toISOString(), isCurrent = false): AssetEntry[] {
+  if (!nodes?.length) return [];
+  return nodes.flatMap((node) => {
+    const media = getNodeMediaValue(node);
+    if (!media) return [];
+    return {
+      id: `${isCurrent ? 'current' : 'snapshot'}-${node.id}-${media.kind}`,
+      url: media.url,
+      kind: media.kind,
+      source: String(node.data?.label ?? node.type ?? 'Node'),
+      timestamp,
+      isCurrent,
+    };
+  });
+}
+
+function extractUrls(nodeRuns: NodeRunRecord[], currentNodes: Node[]): AssetEntry[] {
   const assets: AssetEntry[] = [];
+  assets.push(...extractSnapshotAssets(currentNodes, new Date().toISOString(), true));
   nodeRuns.forEach((run) => {
     const outputs = run.outputs || {};
     Object.entries(outputs).forEach(([key, value]) => {
@@ -56,12 +90,29 @@ function formatRelativeTime(dateIso: string) {
   return `${Math.floor(diffHours / 24)}d ago`;
 }
 
-function renderFormattedValue(value: string, allowPreview: boolean = true, theme: ThemeMode = 'dark') {
+async function openAssetUrl(url: string) {
+  if (!url.startsWith('data:')) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  const response = await fetch(url);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  window.open(objectUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function renderFormattedValue(value: string, allowPreview: boolean = true, theme: ThemeMode = 'dark', fallbackAsset?: AssetEntry | null) {
   const trimmed = value.trim();
   const isOmitted = trimmed.includes('[omitted');
   const isTruncated = trimmed.includes('[truncated:');
   const cleanData = trimmed.replace(/\s/g, '');
   const isValidBase64 = cleanData.length > 50;
+
+  if ((isOmitted || isTruncated) && fallbackAsset) {
+    return <MediaPreview asset={fallbackAsset} theme={theme} compact />;
+  }
 
   if (/^data:image\/[a-z]+;base64,/i.test(cleanData) || isTruncated || isOmitted) {
     if (!allowPreview) {
@@ -72,7 +123,7 @@ function renderFormattedValue(value: string, allowPreview: boolean = true, theme
       <span key="label" className={clsx(theme === 'dark' ? 'text-white/80' : 'text-[#444444]')}>{isOmitted ? 'Redacted' : isTruncated ? 'Truncated' : 'Image'}</span>,
       <div key="preview" className={clsx('my-1.5 h-24 w-40 overflow-hidden rounded-lg border bg-black/20', theme === 'dark' ? 'border-white/10' : 'border-black/5')}>
         {!isOmitted && !isTruncated && isValidBase64 ? (
-          <img src={cleanData} className="h-full w-full object-cover" />
+          <img src={cleanData} alt="Run output preview" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center text-[9px] font-bold uppercase text-amber-400/50">Large Payload</div>
         )}
@@ -92,7 +143,7 @@ function renderFormattedValue(value: string, allowPreview: boolean = true, theme
           <a href={cleanPart} target="_blank" rel="noreferrer" className="text-blue-500 underline break-all text-[11px] font-medium">{cleanPart}</a>
           {isImage && (
             <div className={clsx('h-24 w-40 overflow-hidden rounded-lg border bg-black/20', theme === 'dark' ? 'border-white/10' : 'border-black/5')}>
-              <img src={cleanPart} className="h-full w-full object-cover" />
+              <img src={cleanPart} alt="Run output preview" className="h-full w-full object-cover" />
             </div>
           )}
         </div>
@@ -102,7 +153,35 @@ function renderFormattedValue(value: string, allowPreview: boolean = true, theme
   });
 }
 
-const NodeRunItem = memo(function NodeRunItem({ nodeRun, theme }: { nodeRun: NodeRunRecord; theme: ThemeMode }) {
+function MediaPreview({ asset, theme, compact = false }: { asset: AssetEntry; theme: ThemeMode; compact?: boolean }) {
+  return (
+    <div className={clsx('group overflow-hidden rounded-xl border', theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-black/5 bg-black/[0.02]')}>
+      <div className={clsx('w-full bg-black/20', compact ? 'h-24' : 'aspect-video')}>
+        {asset.kind === 'video' ? (
+          <video src={asset.url} className="h-full w-full object-cover" controls preload="metadata" />
+        ) : (
+          <button type="button" onClick={() => void openAssetUrl(asset.url)} className="block h-full w-full" aria-label={`Open ${asset.source} preview`}>
+            <img src={asset.url} alt={asset.source} className="h-full w-full object-cover" />
+          </button>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 p-2">
+        <span className={clsx('truncate text-[11px] font-bold', theme === 'dark' ? 'text-white/60' : 'text-[#111111]')}>{asset.source}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          {asset.isCurrent && <span className={clsx('text-[9px] font-bold uppercase', theme === 'dark' ? 'text-white/30' : 'text-[#999999]')}>Current</span>}
+          {asset.kind === 'image' && (
+            <button type="button" onClick={() => void openAssetUrl(asset.url)} className={clsx('rounded p-1 transition-colors', theme === 'dark' ? 'text-white/35 hover:bg-white/5 hover:text-white' : 'text-[#999999] hover:bg-black/5 hover:text-[#111111]')} aria-label={`Open ${asset.source}`}>
+              <ExternalLink size={12} />
+            </button>
+          )}
+          {!asset.isCurrent && <span className={clsx('text-[10px] font-medium', theme === 'dark' ? 'text-white/30' : 'text-[#999999]')}>{formatRelativeTime(asset.timestamp)}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const NodeRunItem = memo(function NodeRunItem({ nodeRun, theme, snapshotAsset }: { nodeRun: NodeRunRecord; theme: ThemeMode; snapshotAsset?: AssetEntry | null }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isSuccess = nodeRun.status === 'success';
   const isRunning = nodeRun.status === 'running' || nodeRun.status === 'queued';
@@ -123,15 +202,23 @@ const NodeRunItem = memo(function NodeRunItem({ nodeRun, theme }: { nodeRun: Nod
         {!isExpanded ? (
           <div className={clsx('pl-3 border-l italic text-[11px] truncate', theme === 'dark' ? 'border-white/5 text-white/50' : 'border-black/[0.03] text-[#666666]')}>
             {(() => {
+              if (nodeRun.error) {
+                return <span className="text-red-500">{nodeRun.error}</span>;
+              }
               const out = nodeRun.outputs ?? {};
               const val = out.output || out.image_url || out.imageUrl || out.frame_url || out.video_url || '...';
-              const allowPreview = ['crop', 'extract', 'frame'].includes(nodeRun.type || '');
-              return renderFormattedValue(String(val), allowPreview, theme);
+              const allowPreview = ['image', 'video', 'crop', 'extract', 'frame'].includes(nodeRun.type || '');
+              return renderFormattedValue(String(val), allowPreview, theme, snapshotAsset);
             })()}
           </div>
         ) : (
           <div className="pl-3 pt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
             <div>
+              {nodeRun.error && (
+                <div className={clsx('mb-2 rounded border p-2 text-[10px]', theme === 'dark' ? 'border-red-500/20 bg-red-500/5 text-red-300' : 'border-red-500/20 bg-red-50 text-red-600')}>
+                  {nodeRun.error}
+                </div>
+              )}
               <p className={clsx('text-[9px] font-bold uppercase mb-1', theme === 'dark' ? 'text-white/30' : 'text-[#888888]')}>Outputs</p>
               <pre className={clsx('p-2 rounded border text-[10px] font-mono overflow-auto max-h-32', theme === 'dark' ? 'bg-black/40 border-white/5 text-white/70' : 'bg-black/[0.02] border-black/[0.05] text-[#333333]')}>
                 {JSON.stringify(nodeRun.outputs, null, 2)}
@@ -144,7 +231,19 @@ const NodeRunItem = memo(function NodeRunItem({ nodeRun, theme }: { nodeRun: Nod
   );
 });
 
-const CanvasPreview = memo(function CanvasPreview({ nodes, theme }: { nodes?: any[]; theme: ThemeMode }) {
+const SnapshotMediaStrip = memo(function SnapshotMediaStrip({ nodes, startedAt, theme }: { nodes?: Node[]; startedAt: string; theme: ThemeMode }) {
+  const assets = useMemo(() => extractSnapshotAssets(nodes, startedAt), [nodes, startedAt]);
+  if (assets.length === 0) return null;
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {assets.slice(0, 4).map((asset) => (
+        <MediaPreview key={asset.id} asset={asset} theme={theme} />
+      ))}
+    </div>
+  );
+});
+
+const CanvasPreview = memo(function CanvasPreview({ nodes, theme }: { nodes?: Node[]; theme: ThemeMode }) {
   if (!nodes || nodes.length === 0) {
     return (
       <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl bg-black/20 text-[11px] font-bold text-neutral-500 uppercase tracking-widest opacity-40">
@@ -198,6 +297,21 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
   const { selectHistoryRun, restoreRunVersion } = useWorkflowStore();
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const isRunning = run.status === 'running' || run.status === 'queued';
+  const snapshotAssetsByNodeId = useMemo(() => {
+    const entries = new Map<string, AssetEntry>();
+    for (const node of run.nodesSnapshot ?? []) {
+      const media = getNodeMediaValue(node);
+      if (!media) continue;
+      entries.set(node.id, {
+        id: `node-run-snapshot-${node.id}-${media.kind}`,
+        url: media.url,
+        kind: media.kind,
+        source: String(node.data?.label ?? node.type ?? 'Node'),
+        timestamp: run.startedAt,
+      });
+    }
+    return entries;
+  }, [run.nodesSnapshot, run.startedAt]);
 
   return (
     <div 
@@ -238,6 +352,7 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
       </div>
 
       <CanvasPreview nodes={run.nodesSnapshot} theme={theme} />
+      <SnapshotMediaStrip nodes={run.nodesSnapshot as Node[] | undefined} startedAt={run.startedAt} theme={theme} />
 
       <div className="flex items-center justify-between">
         <div className={clsx('text-[11px] font-bold opacity-40', theme === 'dark' ? 'text-white' : 'text-black')}>
@@ -248,7 +363,13 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
 
       {isActive && run.nodeRuns.length > 0 && (
         <div className={clsx('mt-2 border-t pt-3 space-y-1', theme === 'dark' ? 'border-white/5' : 'border-black/[0.05]')}>
-          {run.nodeRuns.map(nr => <NodeRunItem key={nr.nodeId} nodeRun={nr} theme={theme} />)}
+          {run.nodeRuns.map(nr => <NodeRunItem key={nr.nodeId} nodeRun={nr} theme={theme} snapshotAsset={snapshotAssetsByNodeId.get(nr.nodeId)} />)}
+        </div>
+      )}
+
+      {isActive && run.nodeRuns.length === 0 && run.error && (
+        <div className={clsx('rounded-lg border p-3 text-[11px]', theme === 'dark' ? 'border-red-500/20 bg-red-500/5 text-red-300' : 'border-red-500/20 bg-red-50 text-red-600')}>
+          {run.error}
         </div>
       )}
 
@@ -256,7 +377,7 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={e => e.stopPropagation()}>
           <div className={clsx('w-full max-w-sm rounded-2xl border p-6 shadow-2xl', theme === 'dark' ? 'border-white/10 bg-[#121212] text-white' : 'border-black/5 bg-white text-black')}>
             <h3 className="text-lg font-bold">Restore this version?</h3>
-            <p className={clsx('mt-2 text-sm', theme === 'dark' ? 'opacity-50' : 'text-[#666666]')}>This will replace your current workflow with this version's values.</p>
+            <p className={clsx('mt-2 text-sm', theme === 'dark' ? 'opacity-50' : 'text-[#666666]')}>This will replace your current workflow with this version snapshot.</p>
             <div className="mt-6 flex gap-3">
               <button className={clsx('flex-1 rounded-xl py-2.5 font-bold', theme === 'dark' ? 'bg-white/5' : 'bg-black/5')} onClick={() => setShowRestoreModal(false)}>Cancel</button>
               <button className="flex-1 rounded-xl bg-blue-600 py-2.5 font-bold text-white" onClick={() => { restoreRunVersion(run.id); setShowRestoreModal(false); }}>Confirm</button>
@@ -268,9 +389,9 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
   );
 });
 
-export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean; mode: 'assets' | 'versions'; theme: ThemeMode }) {
-  const { history, activeRunId, isRunning } = useWorkflowStore();
-  const assets = useMemo(() => extractUrls(history.flatMap(h => h.nodeRuns)), [history]);
+export default function RightSidebar({ isOpen, mode, theme, currentNodes = [] }: { isOpen: boolean; mode: 'assets' | 'versions'; theme: ThemeMode; currentNodes?: Node[] }) {
+  const { history, activeRunId } = useWorkflowStore();
+  const assets = useMemo(() => extractUrls(history.flatMap(h => h.nodeRuns), currentNodes), [history, currentNodes]);
 
   return (
     <aside className={clsx(
@@ -289,15 +410,7 @@ export default function RightSidebar({ isOpen, mode, theme }: { isOpen: boolean;
         {mode === 'assets' ? (
           <div className="grid grid-cols-1 gap-3">
             {assets.map(asset => (
-              <div key={asset.id} className={clsx('group overflow-hidden rounded-xl border', theme === 'dark' ? 'border-white/5 bg-white/[0.02]' : 'border-black/5 bg-black/[0.02]')}>
-                <div className="aspect-video w-full bg-black/20">
-                  {asset.kind === 'video' ? <video src={asset.url} className="h-full w-full object-cover" autoPlay muted loop /> : <img src={asset.url} className="h-full w-full object-cover" />}
-                </div>
-                <div className="p-2 flex items-center justify-between">
-                  <span className={clsx('text-[11px] font-bold', theme === 'dark' ? 'text-white/60' : 'text-[#111111]')}>{asset.source}</span>
-                  <span className={clsx('text-[10px] font-medium', theme === 'dark' ? 'text-white/30' : 'text-[#999999]')}>{formatRelativeTime(asset.timestamp)}</span>
-                </div>
-              </div>
+              <MediaPreview key={asset.id} asset={asset} theme={theme} />
             ))}
           </div>
         ) : (

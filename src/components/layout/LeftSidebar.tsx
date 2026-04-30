@@ -5,13 +5,10 @@ import {
   Film,
   Image as ImageIcon,
   ImageMinus,
+  MoreHorizontal,
   Search,
-  TypeIcon,
-  WandSparkles,
-  PanelLeft,
-  X,
   Sparkles,
-  Wand2
+  TypeIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useUser, UserButton } from '@clerk/nextjs';
@@ -25,6 +22,7 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
   const { user } = useUser();
   const loadSampleWorkflow = useWorkflowStore((state) => state.loadSampleWorkflow);
   const persistWorkflowNow = useWorkflowStore((state) => state.persistWorkflowNow);
+  const [moreOpen, setMoreOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses?.[0]?.emailAddress ?? '';
@@ -59,33 +57,35 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-[1px] overflow-y-auto overflow-x-hidden px-2 pt-4 pb-4 scrollbar-none">
-        <StaticRow 
-          icon={<img src="/icons/https---s-krea-ai-icons-HomeIcon-png-128.png" alt="" className="w-5 h-5 object-contain opacity-80" />} 
-          label="Home" 
-          isOpen={isOpen} 
-          theme={theme} 
-        />
-        <StaticRow 
-          icon={<img src="/icons/https---s-krea-ai-icons-Train-png-128.png" alt="" className="w-5 h-5 object-contain opacity-80" />} 
-          label="Train Lora" 
-          isOpen={isOpen} 
-          theme={theme} 
-        />
-        <StaticRow
-          icon={<img src="/icons/https---s-krea-ai-icons-NodeEditor-png-128.png" alt="" className="w-5 h-5 object-contain" />}
-          label="Node Editor"
-          active={pathname === '/nodes' || pathname.startsWith('/nodes/')}
-          isOpen={isOpen}
-          theme={theme}
-          onClick={handleNodeEditorNavigate}
-        />
-        <StaticRow 
-          icon={<img src="/icons/https---s-krea-ai-icons-Assets-png-128.png" alt="" className="w-5 h-5 object-contain opacity-60" />} 
-          label="Assets" 
-          isOpen={isOpen} 
-          theme={theme} 
-        />
+      <div className={clsx("flex flex-1 flex-col gap-[1px] px-2 pt-4 pb-4 scrollbar-none", isOpen ? "overflow-y-auto overflow-x-hidden" : "overflow-visible")}>
+        <div className="mb-5 flex flex-col gap-1">
+          <StaticRow 
+            icon={<img src="/icons/https---s-krea-ai-icons-HomeIcon-png-128.png" alt="" className="w-5 h-5 object-contain opacity-80" />} 
+            label="Home" 
+            isOpen={isOpen} 
+            theme={theme} 
+          />
+          <StaticRow 
+            icon={<img src="/icons/https---s-krea-ai-icons-Train-png-128.png" alt="" className="w-5 h-5 object-contain opacity-80" />} 
+            label="Train Lora" 
+            isOpen={isOpen} 
+            theme={theme} 
+          />
+          <StaticRow
+            icon={<img src="/icons/https---s-krea-ai-icons-NodeEditor-png-128.png" alt="" className="w-5 h-5 object-contain" />}
+            label="Node Editor"
+            active={pathname === '/nodes' || pathname.startsWith('/nodes/')}
+            isOpen={isOpen}
+            theme={theme}
+            onClick={handleNodeEditorNavigate}
+          />
+          <StaticRow 
+            icon={<img src="/icons/https---s-krea-ai-icons-Assets-png-128.png" alt="" className="w-5 h-5 object-contain opacity-60" />} 
+            label="Assets" 
+            isOpen={isOpen} 
+            theme={theme} 
+          />
+        </div>
 
         <SectionTitle isOpen={isOpen} action={<button onClick={handleSearchClick} className="ml-auto hover:text-white"><Search size={14} /></button>}>Tools</SectionTitle>
         
@@ -100,13 +100,37 @@ export default function LeftSidebar({ isOpen, theme, onToggle }: { isOpen: boole
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 mt-2">
-            <div className="h-8 w-8 rounded bg-blue-500/15 flex items-center justify-center"><TypeIcon size={14} className="text-blue-400" /></div>
-            <div className="h-8 w-8 rounded bg-fuchsia-500/15 flex items-center justify-center"><ImageIcon size={14} className="text-fuchsia-400" /></div>
-            <div className="h-8 w-8 rounded bg-amber-500/15 flex items-center justify-center"><Film size={14} className="text-amber-400" /></div>
+            <NodeRow type="text" icon={<TypeIcon size={14} />} label="Text" bgColor="bg-blue-500/15" color="text-blue-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="image" icon={<ImageIcon size={14} />} label="Image" bgColor="bg-fuchsia-500/15" color="text-fuchsia-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="video" icon={<Film size={14} />} label="Video" bgColor="bg-amber-500/15" color="text-amber-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="extract" icon={<ImageMinus size={14} />} label="Extract" bgColor="bg-cyan-500/15" color="text-cyan-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="crop" icon={<Crop size={14} />} label="Crop" bgColor="bg-yellow-500/15" color="text-yellow-400" isOpen={isOpen} theme={theme} />
+            <NodeRow type="llm" icon={<Brain size={14} />} label="LLM" bgColor="bg-emerald-500/15" color="text-emerald-400" isOpen={isOpen} theme={theme} />
           </div>
         )}
 
         <div className="mt-auto pt-4">
+           <StaticRow 
+            icon={<MoreHorizontal size={18} className={theme === 'dark' ? 'text-white/35' : 'text-[#5f6f88]'} />} 
+            label="More" 
+            isOpen={isOpen} 
+            theme={theme} 
+            onClick={() => setMoreOpen((open) => !open)}
+          />
+          {moreOpen && (
+            <div className={clsx(isOpen ? 'mb-2 pl-1' : 'mb-2')}>
+              <StaticRow
+                icon={<Sparkles size={14} className="text-violet-400" />}
+                label="Sample Workflow"
+                isOpen={isOpen}
+                theme={theme}
+                onClick={() => {
+                  loadSampleWorkflow();
+                  setMoreOpen(false);
+                }}
+              />
+            </div>
+          )}
            <SectionTitle isOpen={isOpen}>Sessions</SectionTitle>
            <div className={clsx("flex items-center gap-3 rounded-md hover:bg-white/5 cursor-pointer group transition-all", isOpen ? "px-3 py-2.5" : "justify-center py-2")}>
              <div className="h-8 w-8 min-w-[32px] rounded-full border border-white/10 bg-white/5 flex items-center justify-center overflow-hidden">

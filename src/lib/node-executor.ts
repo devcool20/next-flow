@@ -14,6 +14,13 @@ function parsePercent(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function validatePercent(value: number, name: string, min = 0): number {
+  if (!Number.isFinite(value) || value < min || value > 100) {
+    throw new Error(`${name} must be between ${min} and 100.`);
+  }
+  return value;
+}
+
 export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIOMap> {
   const data = node.data ?? {};
 
@@ -36,10 +43,10 @@ export async function executeNode(node: Node, inputs: NodeIOMap): Promise<NodeIO
     if (!imageUrl) throw new Error('Crop node is missing image_url input.');
     const output = await cropImageToDataUrl({
       imageUrl,
-      x: parsePercent(inputs.x_percent ?? data.x_percent, 0),
-      y: parsePercent(inputs.y_percent ?? data.y_percent, 0),
-      w: parsePercent(inputs.width_percent ?? data.width_percent, 100),
-      h: parsePercent(inputs.height_percent ?? data.height_percent, 100),
+      x: validatePercent(parsePercent(inputs.x_percent ?? data.x_percent, 0), 'x_percent'),
+      y: validatePercent(parsePercent(inputs.y_percent ?? data.y_percent, 0), 'y_percent'),
+      w: validatePercent(parsePercent(inputs.width_percent ?? data.width_percent, 100), 'width_percent', 1),
+      h: validatePercent(parsePercent(inputs.height_percent ?? data.height_percent, 100), 'height_percent', 1),
     });
     return { output };
   }

@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { NodeRunRecord } from '@/lib/workflow-engine';
 import { workflowSamples } from '@/lib/samples';
 import { sanitizeNodesForWorkflowPersistence } from '@/lib/run-sanitization';
+import { getIncludedGraph } from '@/lib/run-graph';
 
 type ApiErrorPayload = {
   error?: string | { code?: string; message?: string };
@@ -37,8 +38,8 @@ export type WorkflowRun = {
   errorCode?: string;
   triggerRunId?: string;
   triggerStatus?: string;
-  nodesSnapshot?: any[];
-  edgesSnapshot?: any[];
+  nodesSnapshot?: Node[];
+  edgesSnapshot?: Edge[];
 };
 export type InteractionMode = 'select' | 'pan' | 'cut';
 
@@ -50,7 +51,8 @@ function isRunActive(status: WorkflowRun['status'] | undefined) {
 
 function toNodeStatus(status: NodeRunRecord['status']) {
   if (status === 'error') return 'error';
-  if (status === 'queued' || status === 'running') return 'running';
+  if (status === 'running') return 'running';
+  if (status === 'queued') return 'queued';
   return 'success';
 }
 
@@ -261,6 +263,28 @@ function buildNode(type: string, position: { x: number; y: number }): Node {
   return { id, type, position, data: { label: title } };
 }
 
+function createOptimisticRun(nodesToRun: Node[], status: NodeRunRecord['status'] = 'queued'): WorkflowRun {
+  const timestamp = new Date().toISOString();
+  return {
+    id: `run_${Date.now()}`,
+    status,
+    startedAt: timestamp,
+    finishedAt: timestamp,
+    nodeRuns: nodesToRun.map((node) => ({
+      executionId: 'pending',
+      nodeId: node.id,
+      type: node.type || 'unknown',
+      title: String(node.data?.label || node.type || 'Node'),
+      status,
+      startedAt: timestamp,
+      finishedAt: timestamp,
+      inputs: {},
+      outputs: {},
+    })),
+    executionPath: [],
+  };
+}
+
 function shouldPersistNodeChanges(changes: NodeChange[]) {
   if (changes.length === 0) return false;
   return changes.some((change) => change.type !== 'select');
@@ -436,31 +460,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
     if (!workflowId) return;
 
-    const connectedNodeIds = new Set<string>();
-    edges.forEach((e) => {
-      connectedNodeIds.add(e.source);
-      connectedNodeIds.add(e.target);
-    });
+    const includedGraph = getIncludedGraph(nodes, edges);
+    if (includedGraph.nodes.length === 0) return;
 
-    const optimisticId = `run_${Date.now()}`;
-    const optimisticRun: WorkflowRun = {
-      id: optimisticId,
-      status: 'queued',
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-      nodeRuns: nodes.map(n => ({ 
-        executionId: 'pending',
-        nodeId: n.id, 
-        type: n.type || 'unknown',
-        title: String(n.data.label || n.type || 'Node'), 
-        status: 'queued', 
-        startedAt: new Date().toISOString(), 
-        finishedAt: new Date().toISOString(), 
-        inputs: {}, 
-        outputs: {} 
-      })),
-      executionPath: [],
-    };
+    const optimisticRun = createOptimisticRun(includedGraph.nodes, 'queued');
+    const optimisticId = optimisticRun.id;
 
     set((state) => ({
       isRunning: true,
@@ -495,6 +499,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       void get().fetchRuns();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Run failed';
+      const optimisticNodeIds = new Set(optimisticRun.nodeRuns.map((entry) => entry.nodeId));
       set((state) => ({
         isRunning: false,
         history: state.history.filter(r => r.id !== optimisticId),
@@ -502,8 +507,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           ...node,
           data: {
             ...node.data,
-            status: node.data?.status === 'running' ? 'error' : node.data?.status,
-            error: node.data?.status === 'running' ? message : node.data?.error,
+            status: optimisticNodeIds.has(node.id) ? 'error' : node.data?.status,
+            error: optimisticNodeIds.has(node.id) ? message : node.data?.error,
           },
         })),
       }));
@@ -515,26 +520,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const selectedNodeIds = nodes.filter((node) => node.selected).map((node) => node.id);
     if (selectedNodeIds.length === 0 || !workflowId) return;
 
-    const optimisticId = `run_${Date.now()}`;
-    const nodesToRun = nodes.filter(n => selectedNodeIds.includes(n.id));
-    const optimisticRun: WorkflowRun = {
-      id: optimisticId,
-      status: 'queued',
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-      nodeRuns: nodesToRun.map(n => ({ 
-        executionId: 'pending',
-        nodeId: n.id, 
-        type: n.type || 'unknown',
-        title: String(n.data.label || n.type || 'Node'), 
-        status: 'queued', 
-        startedAt: new Date().toISOString(), 
-        finishedAt: new Date().toISOString(), 
-        inputs: {}, 
-        outputs: {} 
-      })),
-      executionPath: [],
-    };
+    const includedGraph = getIncludedGraph(nodes, edges, selectedNodeIds);
+    if (includedGraph.nodes.length === 0) return;
+
+    const optimisticRun = createOptimisticRun(includedGraph.nodes, 'queued');
+    const optimisticId = optimisticRun.id;
 
     set((state) => ({
       isRunning: true,
@@ -570,6 +560,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       void get().fetchRuns();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Selected run failed';
+      const optimisticNodeIds = new Set(optimisticRun.nodeRuns.map((entry) => entry.nodeId));
       set((state) => ({
         isRunning: false,
         history: state.history.filter(r => r.id !== optimisticId),
@@ -577,8 +568,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           ...node,
           data: {
             ...node.data,
-            status: node.data?.status === 'running' ? 'error' : node.data?.status,
-            error: node.data?.status === 'running' ? message : node.data?.error,
+            status: optimisticNodeIds.has(node.id) ? 'error' : node.data?.status,
+            error: optimisticNodeIds.has(node.id) ? message : node.data?.error,
           },
         })),
       }));
@@ -602,25 +593,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (!run) return;
 
     const state = get();
-    const nextNodes = state.nodes.map((node) => {
-      const runEntry = run.nodeRuns.find((entry) => entry.nodeId === node.id);
-      if (runEntry) {
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            ...(runEntry.outputs || {}),
-            status: toNodeStatus(runEntry.status),
-            error: runEntry.error,
-          },
-        };
-      }
-      return node;
-    });
+    const snapshotNodes = run.nodesSnapshot?.length ? structuredClone(run.nodesSnapshot) : state.nodes;
+    const snapshotEdges = run.edgesSnapshot?.length ? structuredClone(run.edgesSnapshot).map(normalizeEdgeVisual) : state.edges;
+    const nextNodes = applyRunToNodes(snapshotNodes, run);
 
     set({
       nodes: nextNodes,
+      edges: snapshotEdges,
       activeRunId: runId,
+      isRunning: isRunActive(run.status),
       graphPast: nextPastStack(state.graphPast, state.nodes, state.edges),
       graphFuture: [],
     });

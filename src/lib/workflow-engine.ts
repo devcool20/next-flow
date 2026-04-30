@@ -169,13 +169,10 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   const levels = getExecutionLevels(nodes, edges);
 
   for (const level of levels) {
-    const levelResults = [];
-    for (let levelIndex = 0; levelIndex < level.length; levelIndex += 1) {
-      const nodeId = level[levelIndex];
+    const levelResults = await Promise.all(level.map(async (nodeId, levelIndex) => {
       const node = nodeMap.get(nodeId);
       if (!node) {
-        levelResults.push(null);
-        continue;
+        return null;
       }
 
       const inputs = buildInputsForNode(nodeId, edges, nodeOutputs, persistedOutputsByNodeId);
@@ -200,7 +197,7 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
           outputs,
         };
 
-        levelResults.push({ nodeId, outputs, record });
+        return { nodeId, outputs, record };
       } catch (error) {
         const finishedAt = new Date().toISOString();
         const message = error instanceof Error ? error.message : 'Unknown node execution error.';
@@ -218,9 +215,9 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
           error: message,
         };
 
-        levelResults.push({ nodeId, outputs: null, record });
+        return { nodeId, outputs: null, record };
       }
-    }
+    }));
 
     let firstError: string | null = null;
     for (const result of levelResults) {

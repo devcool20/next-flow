@@ -2,6 +2,7 @@ import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react';
 import { clsx } from 'clsx';
 import { ReactNode, useEffect } from 'react';
 import { useWorkflowStore } from '@/lib/store';
+import { GitFork, Play } from 'lucide-react';
 
 interface BaseNodeProps {
   id: string;
@@ -9,13 +10,14 @@ interface BaseNodeProps {
   icon: ReactNode;
   children: ReactNode;
   type?: string;
-  status?: 'idle' | 'running' | 'success' | 'error';
+  status?: 'idle' | 'queued' | 'running' | 'success' | 'error';
   inputs?: { id: string; label?: string; className?: string; top?: number | string }[];
   outputs?: { id: string; label?: string; className?: string; top?: number | string }[];
   selected?: boolean;
   highlighted?: boolean;
   className?: string;
   showLabels?: boolean;
+  error?: string;
 }
 
 export function BaseNode({
@@ -31,9 +33,14 @@ export function BaseNode({
   highlighted = false,
   className,
   showLabels = false,
+  error,
 }: BaseNodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
   const nodeData = useWorkflowStore((state) => state.nodes.find((n) => n.id === id)?.data);
+  const isBranchStart = useWorkflowStore((state) =>
+    state.edges.some((edge) => edge.source === id) && !state.edges.some((edge) => edge.target === id)
+  );
+  const runWorkflow = useWorkflowStore((state) => state.runWorkflow);
   const displayTitle = (nodeData?.label as string) || (nodeData?.title as string) || title;
   const theme = useWorkflowStore((state) => state.theme);
 
@@ -42,9 +49,46 @@ export function BaseNode({
   }, [id, inputs, outputs, updateNodeInternals]);
 
   const nodeType = type || (id.includes('node_') ? 'unknown' : id.split('_')[0]);
+  const errorMessage = error ?? (typeof nodeData?.error === 'string' ? nodeData.error : '');
+  const runSingleNode = () => {
+    const state = useWorkflowStore.getState();
+    useWorkflowStore.setState({
+      nodes: state.nodes.map((node) => ({ ...node, selected: node.id === id })),
+    });
+    void useWorkflowStore.getState().runSelectedWorkflow();
+  };
 
   return (
     <div className="relative group">
+      <div className="nodrag nowheel pointer-events-none absolute right-full top-0 z-20 flex min-w-max flex-col items-end gap-2 pr-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            runSingleNode();
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          className="flex items-center gap-2 rounded-lg bg-black px-3 py-2 text-[13px] font-semibold text-white shadow-xl ring-1 ring-white/10 transition-colors hover:bg-[#111111]"
+        >
+          <Play size={13} fill="currentColor" />
+          Run node
+        </button>
+        {isBranchStart && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void runWorkflow();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="flex items-center gap-2 rounded-lg bg-black px-3 py-2 text-[13px] font-semibold text-white shadow-xl ring-1 ring-white/10 transition-colors hover:bg-[#111111]"
+          >
+            <GitFork size={13} />
+            Run workflow
+          </button>
+        )}
+      </div>
+
       {/* Hollow Glow Ring for Running Status */}
       {status === 'running' && (
         <div className={clsx(
@@ -97,6 +141,11 @@ export function BaseNode({
             </div>
           )}
           {children}
+          {status === 'error' && errorMessage && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-2.5 py-2 text-[11px] leading-snug text-red-500">
+              {errorMessage}
+            </div>
+          )}
         </div>
 
         {/* Input Handles (Left) */}

@@ -5,6 +5,13 @@ import { memo } from 'react';
 
 type NodeData = Record<string, unknown>;
 
+function clampPercentInput(value: string, min: number) {
+  if (value.trim() === '') return '';
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return String(min);
+  return String(Math.min(100, Math.max(min, parsed)));
+}
+
 export const CropNode = memo(function CropNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const hasInputConnection = useWorkflowStore((state) => state.hasInputConnection);
@@ -45,10 +52,12 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center dark:bg-white/5 dark:text-white/20">X</span>
             <input 
               type="number" 
+              min={0}
+              max={100}
               className="w-full bg-transparent text-neutral-800 p-1.5 text-[13px] font-light focus:outline-none dark:text-white/80" 
               placeholder={xLinked ? 'linked' : '0'}
               value={(data.x_percent as string | number | undefined) ?? ''}
-              onChange={(e) => updateNodeData(id, { x_percent: e.target.value })}
+              onChange={(e) => updateNodeData(id, { x_percent: clampPercentInput(e.target.value, 0) })}
               disabled={xLinked}
             />
           </div>
@@ -57,10 +66,12 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center dark:bg-white/5 dark:text-white/20">Y</span>
             <input 
               type="number" 
+              min={0}
+              max={100}
               className="w-full bg-transparent text-neutral-800 p-1.5 text-xs focus:outline-none dark:text-white/80" 
               placeholder={yLinked ? 'linked' : '0'}
               value={(data.y_percent as string | number | undefined) ?? ''}
-              onChange={(e) => updateNodeData(id, { y_percent: e.target.value })}
+              onChange={(e) => updateNodeData(id, { y_percent: clampPercentInput(e.target.value, 0) })}
               disabled={yLinked}
             />
           </div>
@@ -69,10 +80,12 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center dark:bg-white/5 dark:text-white/20">W</span>
             <input 
               type="number" 
+              min={1}
+              max={100}
               className="w-full bg-transparent text-neutral-800 p-1.5 text-[13px] font-light focus:outline-none dark:text-white/80" 
               placeholder={widthLinked ? 'linked' : '100'}
               value={(data.width_percent as string | number | undefined) ?? ''}
-              onChange={(e) => updateNodeData(id, { width_percent: e.target.value })}
+              onChange={(e) => updateNodeData(id, { width_percent: clampPercentInput(e.target.value, 1) })}
               disabled={widthLinked}
             />
           </div>
@@ -81,10 +94,12 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
             <span className="bg-neutral-200 text-neutral-600 text-[10px] px-2 flex items-center justify-center dark:bg-white/5 dark:text-white/20">H</span>
             <input 
               type="number" 
+              min={1}
+              max={100}
               className="w-full bg-transparent text-neutral-800 p-1.5 text-[13px] font-light focus:outline-none dark:text-white/80" 
               placeholder={heightLinked ? 'linked' : '100'}
               value={(data.height_percent as string | number | undefined) ?? ''}
-              onChange={(e) => updateNodeData(id, { height_percent: e.target.value })}
+              onChange={(e) => updateNodeData(id, { height_percent: clampPercentInput(e.target.value, 1) })}
               disabled={heightLinked}
             />
           </div>

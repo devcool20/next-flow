@@ -93,6 +93,7 @@ export default function Shell({
   const interactionMode = useWorkflowStore((state) => state.interactionMode);
   const setInteractionMode = useWorkflowStore((state) => state.setInteractionMode);
   const selectedCount = useWorkflowStore((state) => state.nodes.filter((n) => n.selected).length);
+  const nodes = useWorkflowStore((state) => state.nodes);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('nextflow-theme');
@@ -297,7 +298,7 @@ export default function Shell({
 
       </main>
 
-      <RightSidebar isOpen={rightOpen} mode={rightPanelMode} theme={theme} />
+      <RightSidebar isOpen={rightOpen} mode={rightPanelMode} theme={theme} currentNodes={nodes} />
 
       {isSearchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setIsSearchModalOpen(false)}>
