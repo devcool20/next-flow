@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react';
 import type { Prisma } from '@prisma/client';
-import { logger, task, tasks } from '@trigger.dev/sdk/v3';
+import type { DeserializedJson } from '@trigger.dev/core';
+import { logger, metadata, streams, task, tasks } from '@trigger.dev/sdk/v3';
 import { AppError, toAppError } from '@/lib/api-errors';
 import { executeWorkflow, type NodeIOMap, type NodeRunRecord } from '@/lib/workflow-engine';
 import { sanitizeForPersistence } from '@/lib/run-sanitization';
@@ -172,6 +173,39 @@ type NodeExecutionMeta = {
   errorMessage?: string;
 };
 
+type RealtimeRunProgress = {
+  runId: string;
+  workflowId: string;
+  status: 'running' | 'success' | 'partial' | 'failed';
+  plannedNodeIds: string[];
+  nodeRuns: NodeRunRecord[];
+  executionPath: string[];
+  error?: string;
+  errorCode?: string;
+  updatedAt: string;
+};
+
+async function publishRunProgress(progress: RealtimeRunProgress) {
+  try {
+    metadata.set('nextflowProgress', progress as unknown as DeserializedJson);
+    await metadata.flush();
+  } catch (error) {
+    logger.warn('Unable to flush run progress metadata', {
+      runId: progress.runId,
+      error: error instanceof Error ? error.message : 'Unknown metadata error',
+    });
+  }
+
+  try {
+    await streams.append('progress', JSON.stringify(progress));
+  } catch (error) {
+    logger.warn('Unable to append run progress stream', {
+      runId: progress.runId,
+      error: error instanceof Error ? error.message : 'Unknown stream error',
+    });
+  }
+}
+
 export const orchestrateWorkflowRunTask = task({
   id: 'orchestrate-workflow-run',
   queue: {
@@ -233,6 +267,18 @@ export const orchestrateWorkflowRunTask = task({
     const nodeTypeById = new Map(payload.nodes.map((node) => [node.id, node.type ?? 'unknown']));
     const nodeMetaById = new Map<string, NodeExecutionMeta>();
     const nodeRuns: NodeRunRecord[] = [];
+    const executionPath: string[] = [];
+    const plannedNodeIds = payload.nodes.map((node) => node.id);
+
+    await publishRunProgress({
+      runId: payload.runId,
+      workflowId: payload.workflowId,
+      status: 'running',
+      plannedNodeIds,
+      nodeRuns,
+      executionPath,
+      updatedAt: new Date().toISOString(),
+    });
 
     const executeNode = async (node: Node, inputs: NodeIOMap): Promise<NodeIOMap> => {
       if (node.type === 'text') {
@@ -377,6 +423,35 @@ export const orchestrateWorkflowRunTask = task({
         persistedOutputsByNodeId,
         executeNode,
         onNodeStart: async (nodeId, inputs) => {
+          const startedAt = new Date().toISOString();
+          const runningRecord: NodeRunRecord = {
+            executionId: 'pending',
+            nodeId,
+            type: nodeTypeById.get(nodeId) ?? 'unknown',
+            title: nodeTypeById.get(nodeId) ?? 'Node',
+            status: 'running',
+            startedAt,
+            finishedAt: startedAt,
+            inputs: sanitizeForPersistence(inputs) as NodeIOMap,
+            outputs: {},
+          };
+          const existingIndex = nodeRuns.findIndex((entry) => entry.nodeId === nodeId);
+          if (existingIndex >= 0) {
+            nodeRuns[existingIndex] = runningRecord;
+          } else {
+            nodeRuns.push(runningRecord);
+          }
+
+          await publishRunProgress({
+            runId: payload.runId,
+            workflowId: payload.workflowId,
+            status: 'running',
+            plannedNodeIds,
+            nodeRuns,
+            executionPath,
+            updatedAt: new Date().toISOString(),
+          });
+
           const execution = await withRetry(() =>
             prisma.nodeExecution.create({
               data: {
@@ -394,9 +469,34 @@ export const orchestrateWorkflowRunTask = task({
           executionByNodeId.set(nodeId, execution.id);
         },
         onNodeFinish: async (record) => {
-          nodeRuns.push(record);
+          const nextRecord: NodeRunRecord = {
+            ...record,
+            inputs: sanitizeForPersistence(record.inputs) as NodeIOMap,
+            outputs: sanitizeForPersistence(record.outputs) as NodeIOMap,
+          };
+          const existingIndex = nodeRuns.findIndex((entry) => entry.nodeId === record.nodeId);
+          if (existingIndex >= 0) {
+            nodeRuns[existingIndex] = nextRecord;
+          } else {
+            nodeRuns.push(nextRecord);
+          }
+          if (nextRecord.status === 'success' && !executionPath.includes(nextRecord.nodeId)) {
+            executionPath.push(nextRecord.nodeId);
+          }
+
           const executionId = executionByNodeId.get(record.nodeId);
-          if (!executionId) return;
+          if (!executionId) {
+            await publishRunProgress({
+              runId: payload.runId,
+              workflowId: payload.workflowId,
+              status: 'running',
+              plannedNodeIds,
+              nodeRuns,
+              executionPath,
+              updatedAt: new Date().toISOString(),
+            });
+            return;
+          }
 
           const meta = nodeMetaById.get(record.nodeId);
           await withRetry(() =>
@@ -413,6 +513,16 @@ export const orchestrateWorkflowRunTask = task({
               },
             })
           );
+
+          await publishRunProgress({
+            runId: payload.runId,
+            workflowId: payload.workflowId,
+            status: 'running',
+            plannedNodeIds,
+            nodeRuns,
+            executionPath,
+            updatedAt: new Date().toISOString(),
+          });
         },
       });
 
@@ -436,6 +546,16 @@ export const orchestrateWorkflowRunTask = task({
         workflowId: payload.workflowId,
         duration,
         executedNodes: result.nodeRuns.length,
+      });
+
+      await publishRunProgress({
+        runId: payload.runId,
+        workflowId: payload.workflowId,
+        status: 'success',
+        plannedNodeIds,
+        nodeRuns,
+        executionPath,
+        updatedAt: new Date().toISOString(),
       });
 
       return {
@@ -469,6 +589,18 @@ export const orchestrateWorkflowRunTask = task({
         duration,
         error: appError.message,
         code: appError.code,
+      });
+
+      await publishRunProgress({
+        runId: payload.runId,
+        workflowId: payload.workflowId,
+        status: nextStatus,
+        plannedNodeIds,
+        nodeRuns,
+        executionPath,
+        error: appError.message,
+        errorCode: appError.code,
+        updatedAt: new Date().toISOString(),
       });
 
       throw error;

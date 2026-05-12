@@ -21,6 +21,7 @@ export const ExtractFrameNode = memo(function ExtractFrameNode({ id, data, selec
       highlighted={Boolean(data.highlighted)}
       inputs={[
         { id: 'video_url', label: 'video_url', className: 'handle-blue' },
+        { id: 'timestamp', label: 'timestamp' },
       ]}
       outputs={[
         { id: 'output', label: 'frame_url', className: 'handle-blue' }

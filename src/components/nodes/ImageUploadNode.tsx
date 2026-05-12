@@ -2,31 +2,62 @@
 import { ImageIcon as ImageIcon2, UploadCloud } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 type NodeData = Record<string, unknown>;
 
 export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // For the prototype, we convert the file to a base64 Data URL so it can be fetched by the server
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      updateNodeData(id, { status: 'running' });
-      setTimeout(() => {
-        updateNodeData(id, { imageUrl: dataUrl, status: 'success' });
-      }, 1000);
-    };
-    reader.readAsDataURL(file);
+    const localPreview = URL.createObjectURL(file);
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return localPreview;
+    });
+    updateNodeData(id, { status: 'running', error: undefined });
+
+    try {
+      const form = new FormData();
+      form.set('kind', 'image');
+      form.set('file', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: form,
+      });
+      const payload = (await response.json()) as { url?: string; error?: { message?: string } };
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error?.message ?? 'Image upload failed.');
+      }
+
+      updateNodeData(id, { imageUrl: payload.url, status: 'success', error: undefined });
+      setPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return null;
+      });
+    } catch (error) {
+      updateNodeData(id, {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Image upload failed.',
+      });
+    } finally {
+      e.target.value = '';
+    }
   };
 
-  const imageUrl = data.imageUrl || data.image_url || data.frame_url || data.video_url;
+  const imageUrl = previewUrl || data.imageUrl || data.image_url || data.frame_url || data.video_url;
 
   return (
     <BaseNode
@@ -64,7 +95,9 @@ export const ImageUploadNode = memo(function ImageUploadNode({ id, data, selecte
             className="w-full h-32 flex flex-col items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-400 transition-colors group dark:bg-[#111111] dark:hover:bg-[#1a1a1a] dark:text-gray-500 rounded-md"
           >
             <UploadCloud size={24} className="group-hover:text-fuchsia-500 transition-colors" />
-            <span className="text-xs font-medium dark:text-gray-400">Click to upload</span>
+            <span className="text-xs font-medium dark:text-gray-400">
+              {data.status === 'running' ? 'Uploading...' : 'Click to upload'}
+            </span>
             <span className="text-[10px] dark:text-gray-500">JPG, PNG, WEBP max 10MB</span>
           </button>
         )}

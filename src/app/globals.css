@@ -29,36 +29,75 @@
   --font-geist-mono: 'Geist Mono', 'monospace';
 }
 
-@keyframes pulse-yellow {
+@keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 0 1px rgba(255, 199, 0, 0.1), 0 0 15px -2px rgba(255, 199, 0, 0.05);
-    border-color: rgba(255, 199, 0, 0.3);
+    opacity: 0.35;
+    transform: scale(0.985);
   }
   50% {
-    box-shadow: 0 0 0 3px rgba(255, 199, 0, 0.15), 0 0 45px -8px rgba(255, 199, 0, 0.25);
-    border-color: rgba(255, 199, 0, 0.7);
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes pulse-yellow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1.5px rgba(255, 199, 0, 0.95),
+      0 0 10px rgba(255, 199, 0, 0.45),
+      0 0 28px rgba(255, 199, 0, 0.22);
+    border-color: rgba(255, 199, 0, 0.95);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2.5px rgba(255, 199, 0, 1),
+      0 0 18px rgba(255, 199, 0, 0.7),
+      0 0 48px rgba(255, 199, 0, 0.38);
+    border-color: rgba(255, 199, 0, 1);
   }
 }
 
 @keyframes pulse-blue {
   0%, 100% {
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1), 0 0 15px -2px rgba(59, 130, 246, 0.05);
-    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow:
+      0 0 0 1.5px rgba(59, 130, 246, 0.95),
+      0 0 10px rgba(59, 130, 246, 0.45),
+      0 0 28px rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.95);
   }
   50% {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 0 45px -8px rgba(59, 130, 246, 0.25);
-    border-color: rgba(59, 130, 246, 0.7);
+    box-shadow:
+      0 0 0 2.5px rgba(59, 130, 246, 1),
+      0 0 18px rgba(59, 130, 246, 0.7),
+      0 0 48px rgba(59, 130, 246, 0.38);
+    border-color: rgba(59, 130, 246, 1);
   }
 }
 
 .node-running-yellow {
-  animation: pulse-yellow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
-  border-color: #FFC700;
+  animation: pulse-yellow 1.35s ease-in-out infinite !important;
+  border-color: #FFC700 !important;
+  z-index: 5;
 }
 
 .node-running-blue {
-  animation: pulse-blue 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
-  border-color: #3b82f6;
+  animation: pulse-blue 1.35s ease-in-out infinite !important;
+  border-color: #3b82f6 !important;
+  z-index: 5;
+}
+
+.react-flow__handle.handle-running-yellow {
+  background: #FFC700 !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 199, 0, 0.35),
+    0 0 14px rgba(255, 199, 0, 0.85) !important;
+}
+
+.react-flow__handle.handle-running-blue {
+  background: #3B82F6 !important;
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.35),
+    0 0 14px rgba(59, 130, 246, 0.85) !important;
 }
 
 body {

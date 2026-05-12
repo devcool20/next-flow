@@ -1,180 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { runs } from '@trigger.dev/sdk/v3';
+import { auth as triggerAuth } from '@trigger.dev/sdk/v3';
 import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow } from '@/lib/workspace-server';
 import { AppError, toAppError } from '@/lib/api-errors';
+import { parseRequestBody, runsQuerySchema } from '@/lib/api-schemas';
 
 const NON_TERMINAL_RUN_STATUSES = new Set(['queued', 'running']);
-const FAIL_FAST_NOT_STARTED_MS = Number(process.env.NEXTFLOW_TRIGGER_FAIL_FAST_MS ?? 20_000);
-const RECONCILE_LIMIT = 3;
-const RECONCILE_HEARTBEAT_MS = 8_000;
+const REALTIME_TOKEN_TTL = process.env.NEXTFLOW_REALTIME_TOKEN_TTL ?? '30m';
 
-function safeFailFastMs() {
-  return Number.isFinite(FAIL_FAST_NOT_STARTED_MS) && FAIL_FAST_NOT_STARTED_MS >= 5_000
-    ? FAIL_FAST_NOT_STARTED_MS
-    : 20_000;
-}
-
-function isTriggerPendingStatus(status: string | undefined) {
-  if (!status) return false;
-  return status === 'PENDING_VERSION' || status === 'QUEUED' || status === 'DEQUEUED';
-}
-
-function isTriggerFailureStatus(status: string | undefined) {
-  if (!status) return false;
-  return (
-    status === 'FAILED' ||
-    status === 'CRASHED' ||
-    status === 'SYSTEM_FAILURE' ||
-    status === 'TIMED_OUT' ||
-    status === 'EXPIRED' ||
-    status === 'CANCELED'
-  );
-}
-
-function extractTriggerErrorMessage(error: unknown): string | null {
-  if (!error) return null;
-  if (typeof error === 'string' && error.trim()) return error.trim();
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object') {
-    const candidate = error as Record<string, unknown>;
-    if (typeof candidate.message === 'string' && candidate.message.trim()) {
-      return candidate.message.trim();
-    }
-  }
-  return null;
-}
-
-async function reconcileStaleRuns(workflowId: string) {
-  const failFastMs = safeFailFastMs();
-  const now = Date.now();
-  const heartbeatCutoff = new Date(now - RECONCILE_HEARTBEAT_MS);
-
-  const staleRuns = await withRetry(() =>
-    prisma.workflowRun.findMany({
-      where: {
-        workflowId,
-        status: { in: [...NON_TERMINAL_RUN_STATUSES] },
-        triggerRunId: { not: null },
-        OR: [{ reconciledAt: null }, { reconciledAt: { lt: heartbeatCutoff } }],
-      },
-      orderBy: { createdAt: 'asc' },
-      take: RECONCILE_LIMIT,
+function getSnapshotNodeIds(nodesSnapshot: unknown): string[] | undefined {
+  if (!Array.isArray(nodesSnapshot)) return undefined;
+  const nodeIds = nodesSnapshot
+    .map((node) => {
+      if (!node || typeof node !== 'object') return null;
+      const id = (node as { id?: unknown }).id;
+      return typeof id === 'string' ? id : null;
     })
-  );
+    .filter((id): id is string => Boolean(id));
+  return nodeIds.length > 0 ? nodeIds : undefined;
+}
 
-  for (const staleRun of staleRuns) {
-    const createdAtMs = staleRun.createdAt.getTime();
-    const ageMs = now - createdAtMs;
+async function createRealtimeToken(triggerRunId: string | null, status: string) {
+  if (!triggerRunId || !NON_TERMINAL_RUN_STATUSES.has(status)) {
+    return undefined;
+  }
 
-    if (ageMs < failFastMs) {
-      continue;
-    }
-
-    const triggerRunId = staleRun.triggerRunId;
-    if (!triggerRunId) continue;
-
-    try {
-      const triggerRun = await runs.retrieve(triggerRunId);
-      const triggerStatus = String(triggerRun.status ?? '').toUpperCase();
-
-      if (isTriggerPendingStatus(triggerStatus)) {
-        const message = `Trigger run did not start within ${Math.round(failFastMs / 1000)}s. Check Trigger.dev deployment/env configuration.`;
-        await withRetry(() =>
-          prisma.workflowRun.update({
-            where: { id: staleRun.id },
-            data: {
-              status: 'failed',
-              triggerStatus,
-              errorCode: 'trigger_not_started',
-              errorMessage: message,
-              duration: now - staleRun.createdAt.getTime(),
-              finishedAt: new Date(),
-              reconciledAt: new Date(),
-            },
-          })
-        );
-
-        await withRetry(() =>
-          prisma.nodeExecution.updateMany({
-            where: {
-              runId: staleRun.id,
-              status: { in: ['queued', 'running'] },
-            },
-            data: {
-              status: 'failed',
-              errorCode: 'trigger_not_started',
-              error: message,
-            },
-          })
-        );
-        continue;
-      }
-
-      if (isTriggerFailureStatus(triggerStatus)) {
-        const message = extractTriggerErrorMessage(triggerRun.error) ?? `Trigger run failed with status ${triggerStatus}.`;
-        await withRetry(() =>
-          prisma.workflowRun.update({
-            where: { id: staleRun.id },
-            data: {
-              status: 'failed',
-              triggerStatus,
-              errorCode: 'trigger_run_failed',
-              errorMessage: message,
-              duration: now - staleRun.createdAt.getTime(),
-              finishedAt: new Date(),
-              reconciledAt: new Date(),
-            },
-          })
-        );
-
-        await withRetry(() =>
-          prisma.nodeExecution.updateMany({
-            where: {
-              runId: staleRun.id,
-              status: { in: ['queued', 'running'] },
-            },
-            data: {
-              status: 'failed',
-              errorCode: 'trigger_run_failed',
-              error: message,
-            },
-          })
-        );
-        continue;
-      }
-
-      const shouldUpdateHeartbeat =
-        staleRun.triggerStatus !== triggerStatus ||
-        !staleRun.reconciledAt ||
-        now - staleRun.reconciledAt.getTime() > RECONCILE_HEARTBEAT_MS;
-
-      if (shouldUpdateHeartbeat) {
-        await withRetry(() =>
-          prisma.workflowRun.update({
-            where: { id: staleRun.id },
-            data: {
-              triggerStatus,
-              reconciledAt: new Date(),
-            },
-          })
-        );
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to retrieve Trigger run status.';
-      await withRetry(() =>
-        prisma.workflowRun.update({
-          where: { id: staleRun.id },
-          data: {
-            triggerStatus: 'STATUS_UNAVAILABLE',
-            errorCode: staleRun.errorCode ?? 'trigger_status_unavailable',
-            errorMessage: staleRun.errorMessage ?? message,
-            reconciledAt: new Date(),
-          },
-        })
-      );
-    }
+  try {
+    return await triggerAuth.createPublicToken({
+      scopes: {
+        read: {
+          runs: [triggerRunId],
+        },
+      },
+      expirationTime: REALTIME_TOKEN_TTL,
+      realtime: {
+        skipColumns: ['payload', 'output'],
+      },
+    });
+  } catch {
+    return undefined;
   }
 }
 
@@ -186,10 +51,11 @@ export async function GET(request: NextRequest) {
     }
 
     const { user } = await ensureUserAndWorkflow(userId);
-    const workflowId = request.nextUrl.searchParams.get('workflowId');
-    if (!workflowId) {
-      throw new AppError('bad_request', 'workflowId is required', 400);
-    }
+    const { workflowId } = parseRequestBody(
+      runsQuerySchema,
+      Object.fromEntries(request.nextUrl.searchParams),
+      'Invalid runs query.'
+    );
 
     const workflow = await withRetry(() =>
       prisma.workflow.findFirst({
@@ -200,8 +66,6 @@ export async function GET(request: NextRequest) {
     if (!workflow) {
       throw new AppError('not_found', 'Workflow not found', 404);
     }
-
-    await reconcileStaleRuns(workflowId);
 
     const workflowRuns = await withRetry(() =>
       prisma.workflowRun.findMany({
@@ -214,8 +78,7 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({
-      runs: workflowRuns.map((run) => ({
+    const mappedRuns = await Promise.all(workflowRuns.map(async (run) => ({
         id: run.id,
         startedAt: (run.startedAt ?? run.createdAt).toISOString(),
         finishedAt: (run.finishedAt ?? run.updatedAt).toISOString(),
@@ -223,6 +86,7 @@ export async function GET(request: NextRequest) {
         scope: run.scope,
         duration: run.duration,
         triggerRunId: run.triggerRunId ?? undefined,
+        triggerPublicAccessToken: await createRealtimeToken(run.triggerRunId, run.status),
         triggerStatus: run.triggerStatus ?? undefined,
         errorCode: run.errorCode ?? undefined,
         error: run.errorMessage ?? undefined,
@@ -253,9 +117,13 @@ export async function GET(request: NextRequest) {
           .filter((exec) => exec.status === 'success')
           .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
           .map((exec) => exec.nodeId),
-        nodesSnapshot: run.nodesSnapshot as any[] ?? undefined,
-        edgesSnapshot: run.edgesSnapshot as any[] ?? undefined,
-      })),
+        plannedNodeIds: getSnapshotNodeIds(run.nodesSnapshot),
+        nodesSnapshot: run.nodesSnapshot as unknown[] ?? undefined,
+        edgesSnapshot: run.edgesSnapshot as unknown[] ?? undefined,
+      })));
+
+    return NextResponse.json({
+      runs: mappedRuns,
     });
   } catch (error) {
     const appError = toAppError(error, 'Failed to load runs');

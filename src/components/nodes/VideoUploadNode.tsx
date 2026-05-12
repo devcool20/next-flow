@@ -1,29 +1,62 @@
 import { Film, UploadCloud } from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useWorkflowStore } from '@/lib/store';
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 type NodeData = Record<string, unknown>;
 
 export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selected }: { id: string, data: NodeData, selected?: boolean }) {
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // For the prototype, we convert the file to a base64 Data URL so it can be fetched by the server
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      updateNodeData(id, { status: 'running' });
-      setTimeout(() => {
-        updateNodeData(id, { videoUrl: dataUrl, status: 'success' });
-      }, 1500);
-    };
-    reader.readAsDataURL(file);
+    const localPreview = URL.createObjectURL(file);
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return localPreview;
+    });
+    updateNodeData(id, { status: 'running', error: undefined });
+
+    try {
+      const form = new FormData();
+      form.set('kind', 'video');
+      form.set('file', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: form,
+      });
+      const payload = (await response.json()) as { url?: string; error?: { message?: string } };
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error?.message ?? 'Video upload failed.');
+      }
+
+      updateNodeData(id, { videoUrl: payload.url, status: 'success', error: undefined });
+      setPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return null;
+      });
+    } catch (error) {
+      updateNodeData(id, {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Video upload failed.',
+      });
+    } finally {
+      e.target.value = '';
+    }
   };
+
+  const videoUrl = previewUrl || data.videoUrl;
 
   return (
     <BaseNode
@@ -38,10 +71,10 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
       outputs={[{ id: 'video_url', label: 'video', className: 'handle-blue' }]}
     >
       <div className="flex flex-col gap-3 h-full">
-        {data.videoUrl ? (
+        {videoUrl ? (
           <div className="relative w-full h-32 rounded-md overflow-hidden bg-neutral-100 border border-neutral-200 dark:bg-[#1A1A1A] dark:border-[#333] group">
             <video 
-              src={String(data.videoUrl)} 
+              src={String(videoUrl)} 
               className="w-full h-full object-cover" 
               autoPlay 
               muted 
@@ -63,7 +96,9 @@ export const VideoUploadNode = memo(function VideoUploadNode({ id, data, selecte
             className="w-full h-32 flex flex-col items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-400 transition-colors group dark:bg-[#111111] dark:hover:bg-[#1a1a1a] dark:text-gray-500 rounded-md"
           >
             <UploadCloud size={24} className="group-hover:text-amber-500 transition-colors" />
-            <span className="text-xs font-medium dark:text-gray-400">Click to upload</span>
+            <span className="text-xs font-medium dark:text-gray-400">
+              {data.status === 'running' ? 'Uploading...' : 'Click to upload'}
+            </span>
             <span className="text-[10px] dark:text-gray-500">MP4, MOV max 50MB</span>
           </button>
         )}

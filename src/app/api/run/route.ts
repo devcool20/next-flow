@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { tasks } from '@trigger.dev/sdk/v3';
+import { Prisma } from '@prisma/client';
 import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow } from '@/lib/workspace-server';
 import { AppError, toAppError } from '@/lib/api-errors';
 import { getIncludedGraph } from '@/lib/run-graph';
 import { stripRuntimeNodeDataForExecution, sanitizeNodesForWorkflowPersistence } from '@/lib/run-sanitization';
+import { parseRequestBody, runBodySchema } from '@/lib/api-schemas';
 import type { RunBody, WorkflowOrchestratorPayload } from '@/lib/run-types';
 
 export const runtime = 'nodejs';
@@ -102,20 +104,6 @@ function ensureDependencies(nodes: RunBody['nodes']): DependencyState {
   return dependencies;
 }
 
-function validateBody(body: unknown): asserts body is RunBody {
-  if (!body || typeof body !== 'object') {
-    throw new AppError('bad_request', 'Invalid run payload.', 400);
-  }
-
-  const candidate = body as Partial<RunBody>;
-  if (!candidate.workflowId || !Array.isArray(candidate.nodes) || !Array.isArray(candidate.edges) || !candidate.scope) {
-    throw new AppError('bad_request', 'Invalid run payload.', 400);
-  }
-  if (candidate.scope !== 'full' && candidate.scope !== 'partial' && candidate.scope !== 'single') {
-    throw new AppError('bad_request', 'Invalid run scope.', 400);
-  }
-}
-
 export async function POST(request: NextRequest) {
   let dependencies: Partial<DependencyState> = {
     database: 'ok',
@@ -129,8 +117,7 @@ export async function POST(request: NextRequest) {
       throw new AppError('unauthorized', 'Unauthorized', 401);
     }
 
-    const body = (await request.json()) as unknown;
-    validateBody(body);
+    const body = parseRequestBody(runBodySchema, await request.json(), 'Invalid run payload.') as RunBody;
 
     const { user } = await ensureUserAndWorkflow(userId);
     const workflow = await withRetry(() =>
@@ -158,8 +145,8 @@ export async function POST(request: NextRequest) {
           scope: body.scope,
           triggerStatus: 'QUEUED',
           startedAt: new Date(),
-          nodesSnapshot: sanitizeNodesForWorkflowPersistence(body.nodes) as any,
-          edgesSnapshot: body.edges as any,
+          nodesSnapshot: sanitizeNodesForWorkflowPersistence(body.nodes) as unknown as Prisma.InputJsonValue,
+          edgesSnapshot: body.edges as unknown as Prisma.InputJsonValue,
         },
       })
     );
@@ -175,6 +162,7 @@ export async function POST(request: NextRequest) {
     };
 
     let triggerHandleId: string | null = null;
+    let triggerPublicAccessToken: string | null = null;
     try {
       const handle = await tasks.trigger('orchestrate-workflow-run', payload, {
         idempotencyKey: ['workflow-run', run.id],
@@ -184,6 +172,7 @@ export async function POST(request: NextRequest) {
       });
 
       triggerHandleId = handle.id;
+      triggerPublicAccessToken = handle.publicAccessToken;
       await withRetry(() =>
         prisma.workflowRun.update({
           where: { id: run.id },
@@ -220,7 +209,9 @@ export async function POST(request: NextRequest) {
           finishedAt: run.createdAt.toISOString(),
           nodeRuns: [],
           executionPath: [],
+          plannedNodeIds: includedGraph.nodes.map((node) => node.id),
           triggerRunId: triggerHandleId,
+          triggerPublicAccessToken,
         },
         dependencies,
       },

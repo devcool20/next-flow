@@ -24,6 +24,18 @@ type ApiErrorPayload = {
 
 export type ThemeMode = 'light' | 'dark';
 
+export type RealtimeRunProgress = {
+  runId: string;
+  workflowId?: string;
+  status?: WorkflowRun['status'];
+  plannedNodeIds?: string[];
+  nodeRuns?: NodeRunRecord[];
+  executionPath?: string[];
+  error?: string;
+  errorCode?: string;
+  updatedAt?: string;
+};
+
 export type WorkflowRun = {
   id: string;
   startedAt: string;
@@ -33,10 +45,12 @@ export type WorkflowRun = {
   duration?: number | null;
   nodeRuns: NodeRunRecord[];
   executionPath: string[];
+  plannedNodeIds?: string[];
   selectedNodeIds?: string[];
   error?: string;
   errorCode?: string;
   triggerRunId?: string;
+  triggerPublicAccessToken?: string;
   triggerStatus?: string;
   nodesSnapshot?: Node[];
   edgesSnapshot?: Edge[];
@@ -67,16 +81,19 @@ function applyRunToNodes(nodes: Node[], run: WorkflowRun | null): Node[] {
     }));
   }
 
+  const plannedNodeIds = new Set(run.plannedNodeIds ?? run.nodesSnapshot?.map((node) => node.id) ?? []);
   const nodeRunById = new Map(run.nodeRuns.map((entry) => [entry.nodeId, entry]));
   return nodes.map((node) => {
     const runEntry = nodeRunById.get(node.id);
     if (!runEntry) {
+      const isPlanned = plannedNodeIds.has(node.id);
       return {
         ...node,
         data: {
           ...node.data,
           highlighted: run.executionPath.includes(node.id),
-          status: isRunActive(run.status) ? node.data?.status ?? 'idle' : node.data?.status ?? 'idle',
+          status: isRunActive(run.status) && isPlanned ? 'queued' : 'idle',
+          error: isPlanned ? undefined : node.data?.error,
         },
       };
     }
@@ -136,6 +153,7 @@ type WorkflowState = {
   loadSampleWorkflow: (sampleId?: string) => void;
   initializeWorkspace: (payload: { workflowId: string; nodes: Node[]; edges: Edge[]; runs?: WorkflowRun[] }) => void;
   fetchRuns: () => Promise<void>;
+  applyRealtimeRunProgress: (progress: RealtimeRunProgress) => void;
   persistWorkflow: () => Promise<void>;
   persistWorkflowNow: () => Promise<void>;
   hasInputConnection: (nodeId: string, handleId: string) => boolean;
@@ -263,25 +281,63 @@ function buildNode(type: string, position: { x: number; y: number }): Node {
   return { id, type, position, data: { label: title } };
 }
 
-function createOptimisticRun(nodesToRun: Node[], status: NodeRunRecord['status'] = 'queued'): WorkflowRun {
+function getInitialRunningNodeIds(nodesToRun: Node[], edgesToRun: Edge[]) {
+  const nodeIds = new Set(nodesToRun.map((node) => node.id));
+  const targetedNodeIds = new Set(
+    edgesToRun
+      .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+      .map((edge) => edge.target)
+  );
+  const rootIds = nodesToRun.filter((node) => !targetedNodeIds.has(node.id)).map((node) => node.id);
+  return new Set(rootIds.length > 0 ? rootIds : nodesToRun.map((node) => node.id));
+}
+
+function createOptimisticRun(
+  nodesToRun: Node[],
+  edgesToRun: Edge[] = [],
+  status: NodeRunRecord['status'] = 'queued'
+): WorkflowRun {
   const timestamp = new Date().toISOString();
+  const initialRunningNodeIds = status === 'queued' ? getInitialRunningNodeIds(nodesToRun, edgesToRun) : new Set<string>();
+  const startedNodes = nodesToRun.filter((node) => initialRunningNodeIds.has(node.id));
   return {
     id: `run_${Date.now()}`,
     status,
     startedAt: timestamp,
     finishedAt: timestamp,
-    nodeRuns: nodesToRun.map((node) => ({
+    plannedNodeIds: nodesToRun.map((node) => node.id),
+    nodeRuns: startedNodes.map((node) => ({
       executionId: 'pending',
       nodeId: node.id,
       type: node.type || 'unknown',
       title: String(node.data?.label || node.type || 'Node'),
-      status,
+      status: 'running',
       startedAt: timestamp,
       finishedAt: timestamp,
       inputs: {},
       outputs: {},
     })),
     executionPath: [],
+  };
+}
+
+function mergeRunWithExisting(existingRun: WorkflowRun | undefined, incomingRun: WorkflowRun): WorkflowRun {
+  if (!existingRun) return incomingRun;
+
+  const shouldPreserveNodeRuns =
+    incomingRun.nodeRuns.length === 0 &&
+    existingRun.nodeRuns.length > 0 &&
+    isRunActive(incomingRun.status);
+
+  return {
+    ...incomingRun,
+    triggerPublicAccessToken: incomingRun.triggerPublicAccessToken ?? existingRun.triggerPublicAccessToken,
+    plannedNodeIds: incomingRun.plannedNodeIds ?? existingRun.plannedNodeIds,
+    nodeRuns: shouldPreserveNodeRuns ? existingRun.nodeRuns : incomingRun.nodeRuns,
+    executionPath:
+      shouldPreserveNodeRuns && incomingRun.executionPath.length === 0
+        ? existingRun.executionPath
+        : incomingRun.executionPath,
   };
 }
 
@@ -463,7 +519,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const includedGraph = getIncludedGraph(nodes, edges);
     if (includedGraph.nodes.length === 0) return;
 
-    const optimisticRun = createOptimisticRun(includedGraph.nodes, 'queued');
+    const optimisticRun = createOptimisticRun(includedGraph.nodes, includedGraph.edges, 'queued');
     const optimisticId = optimisticRun.id;
 
     set((state) => ({
@@ -485,21 +541,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!response.ok || !payload.run) {
         throw new Error(errorMessage);
       }
-      const run: WorkflowRun = {
+      const serverRun: WorkflowRun = {
         ...payload.run,
         nodeRuns: payload.run.nodeRuns ?? [],
         executionPath: payload.run.executionPath ?? [],
+        plannedNodeIds: payload.run.plannedNodeIds ?? optimisticRun.plannedNodeIds,
       };
+      const run = mergeRunWithExisting(optimisticRun, serverRun);
       
       set((state) => ({
         isRunning: isRunActive(run.status),
         history: dedupeRuns([run, ...state.history.filter(r => r.id !== optimisticId)]),
         activeRunId: run.id,
+        nodes: applyRunToNodes(state.nodes, run),
       }));
       void get().fetchRuns();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Run failed';
       const optimisticNodeIds = new Set(optimisticRun.nodeRuns.map((entry) => entry.nodeId));
+      const plannedNodeIds = new Set(optimisticRun.plannedNodeIds ?? []);
       set((state) => ({
         isRunning: false,
         history: state.history.filter(r => r.id !== optimisticId),
@@ -507,8 +567,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           ...node,
           data: {
             ...node.data,
-            status: optimisticNodeIds.has(node.id) ? 'error' : node.data?.status,
-            error: optimisticNodeIds.has(node.id) ? message : node.data?.error,
+            status: plannedNodeIds.has(node.id) || optimisticNodeIds.has(node.id) ? 'error' : node.data?.status,
+            error: plannedNodeIds.has(node.id) || optimisticNodeIds.has(node.id) ? message : node.data?.error,
           },
         })),
       }));
@@ -523,7 +583,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const includedGraph = getIncludedGraph(nodes, edges, selectedNodeIds);
     if (includedGraph.nodes.length === 0) return;
 
-    const optimisticRun = createOptimisticRun(includedGraph.nodes, 'queued');
+    const optimisticRun = createOptimisticRun(includedGraph.nodes, includedGraph.edges, 'queued');
     const optimisticId = optimisticRun.id;
 
     set((state) => ({
@@ -546,21 +606,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!response.ok || !payload.run) {
         throw new Error(errorMessage);
       }
-      const run: WorkflowRun = {
+      const serverRun: WorkflowRun = {
         ...payload.run,
         nodeRuns: payload.run.nodeRuns ?? [],
         executionPath: payload.run.executionPath ?? [],
+        plannedNodeIds: payload.run.plannedNodeIds ?? optimisticRun.plannedNodeIds,
       };
+      const run = mergeRunWithExisting(optimisticRun, serverRun);
       
       set((state) => ({
         isRunning: isRunActive(run.status),
         history: dedupeRuns([run, ...state.history.filter(r => r.id !== optimisticId)]),
         activeRunId: run.id,
+        nodes: applyRunToNodes(state.nodes, run),
       }));
       void get().fetchRuns();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Selected run failed';
       const optimisticNodeIds = new Set(optimisticRun.nodeRuns.map((entry) => entry.nodeId));
+      const plannedNodeIds = new Set(optimisticRun.plannedNodeIds ?? []);
       set((state) => ({
         isRunning: false,
         history: state.history.filter(r => r.id !== optimisticId),
@@ -568,8 +632,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           ...node,
           data: {
             ...node.data,
-            status: optimisticNodeIds.has(node.id) ? 'error' : node.data?.status,
-            error: optimisticNodeIds.has(node.id) ? message : node.data?.error,
+            status: plannedNodeIds.has(node.id) || optimisticNodeIds.has(node.id) ? 'error' : node.data?.status,
+            error: plannedNodeIds.has(node.id) || optimisticNodeIds.has(node.id) ? message : node.data?.error,
           },
         })),
       }));
@@ -673,7 +737,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!response.ok) return;
 
       const payload = (await response.json()) as { runs: WorkflowRun[] };
-      const history = dedupeRuns(payload.runs ?? []);
+      const existingRunsById = new Map(get().history.map((run) => [run.id, run]));
+      const history = dedupeRuns((payload.runs ?? []).map((run) => mergeRunWithExisting(existingRunsById.get(run.id), run)));
       const currentActiveRunId = get().activeRunId;
       const resolvedActiveRunId = currentActiveRunId && history.some((run) => run.id === currentActiveRunId)
         ? currentActiveRunId
@@ -689,6 +754,35 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     } catch {
       // no-op: polling should not interrupt the editor
     }
+  },
+  applyRealtimeRunProgress: (progress) => {
+    if (!progress.runId) return;
+
+    set((state) => {
+      const existingRun = state.history.find((run) => run.id === progress.runId);
+      if (!existingRun) {
+        return state;
+      }
+
+      const nextRun: WorkflowRun = {
+        ...existingRun,
+        status: progress.status ?? existingRun.status,
+        plannedNodeIds: progress.plannedNodeIds ?? existingRun.plannedNodeIds,
+        nodeRuns: progress.nodeRuns ?? existingRun.nodeRuns,
+        executionPath: progress.executionPath ?? existingRun.executionPath,
+        error: progress.error ?? existingRun.error,
+        errorCode: progress.errorCode ?? existingRun.errorCode,
+        finishedAt: progress.updatedAt ?? existingRun.finishedAt,
+      };
+      const history = dedupeRuns([nextRun, ...state.history.filter((run) => run.id !== progress.runId)]);
+      const shouldApplyToCanvas = state.activeRunId === progress.runId;
+
+      return {
+        history,
+        isRunning: isRunActive(nextRun.status),
+        nodes: shouldApplyToCanvas ? applyRunToNodes(state.nodes, nextRun) : state.nodes,
+      };
+    });
   },
   persistWorkflow: async () => {
     if (persistTimer) {

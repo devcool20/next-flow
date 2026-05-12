@@ -12,7 +12,9 @@ import {
   type Node,
   BackgroundVariant,
 } from '@xyflow/react';
+import { useRealtimeRunWithStreams } from '@trigger.dev/react-hooks';
 import { useWorkflowStore } from '@/lib/store';
+import type { RealtimeRunProgress } from '@/lib/store';
 
 import { TextNode } from '../nodes/TextNode';
 import { ImageUploadNode } from '../nodes/ImageUploadNode';
@@ -43,6 +45,41 @@ const EDGE_TYPES = {
 const CUT_CURSOR =
   'url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2222%22 height=%2222%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23ef4444%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%226%22 cy=%226%22 r=%223%22/%3E%3Ccircle cx=%226%22 cy=%2218%22 r=%223%22/%3E%3Cpath d=%22M20 4L8.1 15.9%22/%3E%3Cpath d=%22M14.5 14.5L20 20%22/%3E%3C/svg%3E") 6 4, crosshair';
 
+function getRealtimeProgress(metadata: unknown): RealtimeRunProgress | null {
+  if (!metadata || typeof metadata !== 'object') return null;
+  const value = (metadata as Record<string, unknown>).nextflowProgress;
+  if (!value || typeof value !== 'object') return null;
+  const progress = value as Partial<RealtimeRunProgress>;
+  return typeof progress.runId === 'string' ? (progress as RealtimeRunProgress) : null;
+}
+
+function getRealtimeProgressChunk(value: unknown): RealtimeRunProgress | null {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    try {
+      return getRealtimeProgressChunk(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value !== 'object') return null;
+  const progress = value as Partial<RealtimeRunProgress>;
+  return typeof progress.runId === 'string' ? (progress as RealtimeRunProgress) : null;
+}
+
+function getLatestStreamProgress(streamValues: unknown): RealtimeRunProgress | null {
+  if (!Array.isArray(streamValues) || streamValues.length === 0) return null;
+
+  for (let index = streamValues.length - 1; index >= 0; index -= 1) {
+    const progress = getRealtimeProgressChunk(streamValues[index]);
+    if (progress) return progress;
+  }
+
+  return null;
+}
+
 function WorkflowCanvasBody({
   initialNodes,
   initialEdges,
@@ -62,7 +99,7 @@ function WorkflowCanvasBody({
     initializeWorkspace,
     fetchRuns,
     history,
-    isRunning,
+    activeRunId,
     cutMode,
     interactionMode,
     removeEdgeById,
@@ -74,6 +111,7 @@ function WorkflowCanvasBody({
     updateNodeData,
     editingTextNodeId,
     setEditingTextNodeId,
+    applyRealtimeRunProgress,
   } = useWorkflowStore();
   const activeTextNode = nodes.find(n => n.id === editingTextNodeId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -110,6 +148,28 @@ function WorkflowCanvasBody({
   }, []);
 
   const currentWorkflowId = useWorkflowStore((state) => state.workflowId);
+  const activeRealtimeRun = history.find(
+    (run) =>
+      run.id === activeRunId &&
+      (run.status === 'queued' || run.status === 'running') &&
+      run.triggerRunId &&
+      run.triggerPublicAccessToken
+  );
+
+  const { run: realtimeRun, streams: realtimeStreams } = useRealtimeRunWithStreams(activeRealtimeRun?.triggerRunId, {
+    accessToken: activeRealtimeRun?.triggerPublicAccessToken ?? '',
+    enabled: Boolean(activeRealtimeRun?.triggerRunId && activeRealtimeRun?.triggerPublicAccessToken),
+    skipColumns: ['payload', 'output'],
+    onComplete: () => {
+      void fetchRuns();
+    },
+  });
+
+  useEffect(() => {
+    const progress = getLatestStreamProgress(realtimeStreams.progress) ?? getRealtimeProgress(realtimeRun?.metadata);
+    if (!progress) return;
+    applyRealtimeRunProgress(progress);
+  }, [applyRealtimeRunProgress, realtimeRun?.metadata, realtimeStreams.progress]);
 
   useEffect(() => {
     if (!workflowId) return;
@@ -124,18 +184,6 @@ function WorkflowCanvasBody({
       void fetchRuns();
     }
   }, [workflowId, currentWorkflowId, initialNodes, initialEdges, initializeWorkspace, fetchRuns]);
-
-  useEffect(() => {
-    const hasActiveRun = isRunning || history.some((run) => run.status === 'queued' || run.status === 'running');
-    const pollIntervalMs = hasActiveRun ? 2000 : 12000;
-
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void fetchRuns();
-      }
-    }, pollIntervalMs);
-    return () => clearInterval(interval);
-  }, [fetchRuns, history, isRunning]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();

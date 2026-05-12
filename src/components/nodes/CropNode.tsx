@@ -33,6 +33,10 @@ export const CropNode = memo(function CropNode({ id, data, selected }: { id: str
       highlighted={Boolean(data.highlighted)}
       inputs={[
         { id: 'image_url', label: 'image_url', className: 'handle-blue' },
+        { id: 'x_percent', label: 'x_percent' },
+        { id: 'y_percent', label: 'y_percent' },
+        { id: 'width_percent', label: 'width_percent' },
+        { id: 'height_percent', label: 'height_percent' },
       ]}
       outputs={[
         { id: 'output', label: 'cropped_url', className: 'handle-blue' }

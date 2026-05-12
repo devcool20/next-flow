@@ -231,6 +231,25 @@ const NodeRunItem = memo(function NodeRunItem({ nodeRun, theme, snapshotAsset }:
   );
 });
 
+const QueuedNodesSummary = memo(function QueuedNodesSummary({ count, theme }: { count: number; theme: ThemeMode }) {
+  if (count <= 0) return null;
+  return (
+    <div className="relative pl-4 pb-3 last:pb-0">
+      <div className={clsx('absolute left-0 top-0 h-full w-[1px]', theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.06]')} />
+      <div className={clsx('absolute left-0 top-2.5 h-[1px] w-3', theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.06]')} />
+      <div className="flex items-center gap-2">
+        <span className={clsx('text-[12px] font-bold', theme === 'dark' ? 'text-white/35' : 'text-[#777777]')}>
+          {count} queued
+        </span>
+        <Clock size={12} className={theme === 'dark' ? 'text-white/25' : 'text-black/25'} />
+      </div>
+      <div className={clsx('pl-3 border-l italic text-[11px]', theme === 'dark' ? 'border-white/5 text-white/25' : 'border-black/[0.03] text-[#888888]')}>
+        Waiting for upstream nodes to finish
+      </div>
+    </div>
+  );
+});
+
 const SnapshotMediaStrip = memo(function SnapshotMediaStrip({ nodes, startedAt, theme }: { nodes?: Node[]; startedAt: string; theme: ThemeMode }) {
   const assets = useMemo(() => extractSnapshotAssets(nodes, startedAt), [nodes, startedAt]);
   if (assets.length === 0) return null;
@@ -297,6 +316,11 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
   const { selectHistoryRun, restoreRunVersion } = useWorkflowStore();
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const isRunning = run.status === 'running' || run.status === 'queued';
+  const queuedNodeCount = useMemo(() => {
+    if (!isRunning) return 0;
+    const startedNodeIds = new Set(run.nodeRuns.map((nodeRun) => nodeRun.nodeId));
+    return (run.plannedNodeIds ?? []).filter((nodeId) => !startedNodeIds.has(nodeId)).length;
+  }, [isRunning, run.nodeRuns, run.plannedNodeIds]);
   const snapshotAssetsByNodeId = useMemo(() => {
     const entries = new Map<string, AssetEntry>();
     for (const node of run.nodesSnapshot ?? []) {
@@ -364,12 +388,17 @@ const VersionHistoryCard = memo(function VersionHistoryCard({ run, isActive, the
       {isActive && run.nodeRuns.length > 0 && (
         <div className={clsx('mt-2 border-t pt-3 space-y-1', theme === 'dark' ? 'border-white/5' : 'border-black/[0.05]')}>
           {run.nodeRuns.map(nr => <NodeRunItem key={nr.nodeId} nodeRun={nr} theme={theme} snapshotAsset={snapshotAssetsByNodeId.get(nr.nodeId)} />)}
+          <QueuedNodesSummary count={queuedNodeCount} theme={theme} />
         </div>
       )}
 
-      {isActive && run.nodeRuns.length === 0 && run.error && (
-        <div className={clsx('rounded-lg border p-3 text-[11px]', theme === 'dark' ? 'border-red-500/20 bg-red-500/5 text-red-300' : 'border-red-500/20 bg-red-50 text-red-600')}>
-          {run.error}
+      {isActive && run.nodeRuns.length === 0 && (
+        <div className={clsx('rounded-lg border p-3 text-[11px]', theme === 'dark' ? 'border-white/5 bg-white/[0.02] text-white/35' : 'border-black/5 bg-black/[0.02] text-[#777777]')}>
+          {run.error ? (
+            <span className="text-red-500">{run.error}</span>
+          ) : (
+            <span>{queuedNodeCount > 0 ? `${queuedNodeCount} nodes queued. Waiting for first execution event.` : 'Waiting for execution events.'}</span>
+          )}
         </div>
       )}
 

@@ -64,5 +64,19 @@ export function toAppError(error: unknown, fallbackMessage = 'Unexpected server 
     });
   }
 
+  if (typeof message === 'string' && message.includes('transloadit_unavailable')) {
+    return new AppError('dependency_unavailable', 'Transloadit is not configured or unavailable.', 503, {
+      dependency: 'transloadit',
+      raw: message,
+    });
+  }
+
+  if (typeof message === 'string' && message.includes('transloadit_upload_failed')) {
+    return new AppError('task_failed', 'Transloadit upload failed.', 502, {
+      dependency: 'transloadit',
+      raw: message,
+    });
+  }
+
   return new AppError('execution_failed', message || fallbackMessage, 500);
 }

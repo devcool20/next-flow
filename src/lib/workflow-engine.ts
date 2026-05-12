@@ -118,6 +118,26 @@ function getExecutionLevels(nodes: Node[], edges: Edge[]): string[][] {
   return levels;
 }
 
+function buildExecutionGraph(nodes: Node[], edges: Edge[]) {
+  const indegree = new Map<string, number>();
+  const outgoing = new Map<string, string[]>();
+
+  for (const node of nodes) {
+    indegree.set(node.id, 0);
+    outgoing.set(node.id, []);
+  }
+
+  for (const edge of edges) {
+    if (!indegree.has(edge.source) || !indegree.has(edge.target)) {
+      continue;
+    }
+    indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
+    outgoing.get(edge.source)?.push(edge.target);
+  }
+
+  return { indegree, outgoing };
+}
+
 function buildInputsForNode(
   nodeId: string,
   edges: Edge[],
@@ -166,76 +186,117 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   const nodeOutputs = new Map<string, NodeIOMap>();
   const nodeRuns: NodeRunRecord[] = [];
   const executionPath: string[] = [];
-  const levels = getExecutionLevels(nodes, edges);
+  getExecutionLevels(nodes, edges);
 
-  for (const level of levels) {
-    const levelResults = await Promise.all(level.map(async (nodeId, levelIndex) => {
-      const node = nodeMap.get(nodeId);
-      if (!node) {
-        return null;
+  const { indegree, outgoing } = buildExecutionGraph(nodes, edges);
+  const remainingParents = new Map(indegree);
+  const roots = [...indegree.entries()]
+    .filter(([, degree]) => degree === 0)
+    .map(([nodeId]) => nodeId);
+  let runningCount = 0;
+  let scheduledCount = 0;
+  let firstError: string | null = null;
+
+  await new Promise<void>((resolve, reject) => {
+    const maybeComplete = () => {
+      if (runningCount === 0) {
+        resolve();
       }
+    };
 
-      const inputs = buildInputsForNode(nodeId, edges, nodeOutputs, persistedOutputsByNodeId);
-      const startedAt = new Date().toISOString();
-      const executionId = `${nodeId}:${startedAt}:${levelIndex}`;
+    const scheduleNode = (nodeId: string) => {
+      const nodeIndex = scheduledCount;
+      scheduledCount += 1;
+      runningCount += 1;
 
-      await onNodeStart?.(nodeId, inputs);
+      void (async () => {
+        const node = nodeMap.get(nodeId);
+        if (!node) {
+          return;
+        }
 
-      try {
-        const outputs = await executeNode(node, inputs);
-        const finishedAt = new Date().toISOString();
+        const inputs = buildInputsForNode(nodeId, edges, nodeOutputs, persistedOutputsByNodeId);
+        const startedAt = new Date().toISOString();
+        const executionId = `${nodeId}:${startedAt}:${nodeIndex}`;
 
-        const record: NodeRunRecord = {
-          executionId,
-          nodeId,
-          type: node.type ?? 'unknown',
-          title: String(node.data?.label ?? node.type ?? 'Node'),
-          status: 'success',
-          startedAt,
-          finishedAt,
-          inputs,
-          outputs,
-        };
+        await onNodeStart?.(nodeId, inputs);
 
-        return { nodeId, outputs, record };
-      } catch (error) {
-        const finishedAt = new Date().toISOString();
-        const message = error instanceof Error ? error.message : 'Unknown node execution error.';
+        let outputs: NodeIOMap | null = null;
+        let record: NodeRunRecord;
 
-        const record: NodeRunRecord = {
-          executionId,
-          nodeId,
-          type: node.type ?? 'unknown',
-          title: String(node.data?.label ?? node.type ?? 'Node'),
-          status: 'error',
-          startedAt,
-          finishedAt,
-          inputs,
-          outputs: {},
-          error: message,
-        };
+        try {
+          outputs = await executeNode(node, inputs);
+          const finishedAt = new Date().toISOString();
 
-        return { nodeId, outputs: null, record };
-      }
-    }));
+          record = {
+            executionId,
+            nodeId,
+            type: node.type ?? 'unknown',
+            title: String(node.data?.label ?? node.type ?? 'Node'),
+            status: 'success',
+            startedAt,
+            finishedAt,
+            inputs,
+            outputs,
+          };
+        } catch (error) {
+          const finishedAt = new Date().toISOString();
+          const message = error instanceof Error ? error.message : 'Unknown node execution error.';
 
-    let firstError: string | null = null;
-    for (const result of levelResults) {
-      if (!result) continue;
-      nodeRuns.push(result.record);
-      await onNodeFinish?.(result.record);
+          record = {
+            executionId,
+            nodeId,
+            type: node.type ?? 'unknown',
+            title: String(node.data?.label ?? node.type ?? 'Node'),
+            status: 'error',
+            startedAt,
+            finishedAt,
+            inputs,
+            outputs: {},
+            error: message,
+          };
+        }
 
-      if (result.record.status === 'success' && result.outputs) {
-        nodeOutputs.set(result.nodeId, result.outputs);
-        executionPath.push(result.nodeId);
-      } else if (!firstError) {
-        firstError = result.record.error ?? `Node ${result.nodeId} failed`;
-      }
+        nodeRuns.push(record);
+        if (record.status === 'success' && outputs) {
+          nodeOutputs.set(nodeId, outputs);
+          executionPath.push(nodeId);
+        }
+
+        await onNodeFinish?.(record);
+
+        if (record.status === 'success') {
+          if (!firstError) {
+            for (const targetId of outgoing.get(nodeId) ?? []) {
+              const nextRemaining = (remainingParents.get(targetId) ?? 0) - 1;
+              remainingParents.set(targetId, nextRemaining);
+              if (nextRemaining === 0) {
+                scheduleNode(targetId);
+              }
+            }
+          }
+        } else {
+          if (!firstError) {
+            firstError = record.error ?? `Node ${nodeId} failed`;
+          }
+        }
+      })()
+        .catch(reject)
+        .finally(() => {
+          runningCount -= 1;
+          maybeComplete();
+        });
+    };
+
+    for (const rootId of roots) {
+      scheduleNode(rootId);
     }
 
-    if (firstError) {
-      throw new Error(firstError);
-    }
+    maybeComplete();
+  });
+
+  if (firstError) {
+    throw new Error(firstError);
   }
 
   return { nodeRuns, executionPath };

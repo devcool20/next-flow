@@ -6,6 +6,7 @@ import { prisma, withRetry } from '@/lib/prisma';
 import { ensureUserAndWorkflow, parseWorkflowJson } from '@/lib/workspace-server';
 import { AppError, toAppError } from '@/lib/api-errors';
 import { sanitizeNodesForWorkflowPersistence } from '@/lib/run-sanitization';
+import { parseRequestBody, workflowPatchSchema, workflowPutSchema } from '@/lib/api-schemas';
 
 export async function GET() {
   try {
@@ -44,15 +45,7 @@ export async function PUT(request: NextRequest) {
       throw new AppError('unauthorized', 'Unauthorized', 401);
     }
 
-    const body = (await request.json()) as {
-      workflowId: string;
-      nodes: unknown;
-      edges: unknown;
-    };
-
-    if (!body.workflowId) {
-      throw new AppError('bad_request', 'workflowId is required', 400);
-    }
+    const body = parseRequestBody(workflowPutSchema, await request.json(), 'Invalid workflow payload.');
 
     const { user } = await ensureUserAndWorkflow(userId);
 
@@ -71,7 +64,7 @@ export async function PUT(request: NextRequest) {
         where: { id: workflow.id },
         data: {
           nodes: sanitizeNodesForWorkflowPersistence(
-            (Array.isArray(body.nodes) ? (body.nodes as Node[]) : []) as Node[]
+            body.nodes as Node[]
           ) as unknown as Prisma.InputJsonValue,
           edges: body.edges as Prisma.InputJsonValue,
         },
@@ -101,20 +94,9 @@ export async function PATCH(request: NextRequest) {
       throw new AppError('unauthorized', 'Unauthorized', 401);
     }
 
-    const body = (await request.json()) as {
-      workflowId?: string;
-      name?: string;
-    };
-
-    const workflowId = body.workflowId?.trim();
-    const name = body.name?.trim();
-
-    if (!workflowId) {
-      throw new AppError('bad_request', 'workflowId is required', 400);
-    }
-    if (!name) {
-      throw new AppError('bad_request', 'name is required', 400);
-    }
+    const body = parseRequestBody(workflowPatchSchema, await request.json(), 'Invalid workflow rename payload.');
+    const workflowId = body.workflowId;
+    const name = body.name;
 
     const { user } = await ensureUserAndWorkflow(userId);
     const workflow = await withRetry(() => 
